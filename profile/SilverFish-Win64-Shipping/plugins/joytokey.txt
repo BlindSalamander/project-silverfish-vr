@@ -1,0 +1,122 @@
+# All keys are use the hex code starting with 0x in the windows virtual key list below.
+# Letters A-Z and 0-9 can be used in place of the hex codes. All others must be the hex code.
+# Hex must start with 0x. Not 0X, nothing else except 0x
+#
+# The list is here: 
+# https://learn.microsoft.com/en-us/windows/win32/inputdev/virtual-key-codes
+# 
+# For example, to set to A, you can use A or 0x41. To set to 5, use 5 or 0x35. To set to DEL, use 0x2E
+# The single keys can only be used for A-Z, 0-9. All other keys must use the hex code from the link above.
+# Some common key codes are:
+#   Backspace: 	0x08
+#   Tab: 	0x09
+#   Enter:	0x0D
+#   Escape: 	0x1B
+#   Space:	0x20
+#   Ins:	0x2D
+#   Del:	0x2E
+#   Arrows: (left, up, right, down) 0x25, 0x26, 0x27, 0x28
+#   Numpad 0 - Numpad 9: 0x60 - 0x69
+#   F1 - F10:  0x70 - 0x79
+# 
+# Leaving a button unassigned disables it. OFF switches a stick direction off (Silverfish fork; 0 would be the 0 key).
+#
+# Mouse
+# You can set mouse clicks using the same link above:
+#   Left Button: 	0x01
+#   Right Button: 	0x02
+#   Middle Button:	0x04
+#   XButton1: 		0x05
+#   XButton2: 		0x06
+#
+# If left unassigned, the right stick maps to the mouse pointer. There is currently
+# no sensitivity adjustments for this. You can assign the sticks to buttons or directly
+# to 0 to disable the mouse. Leaving it empty defaults to right stick moving mouse.
+#
+# Shift Key
+# GAMEPAD_LB can be shift so leave it unassigned if you wish to use it as such.
+# This will allow for a second set of keys while holding shift
+# ---------------------------------------------------------------------------
+# PROJECT SILVERFISH VR by Blind - Steam Frame layout
+# The game is keyboard / mouse only. UEVR turns the Frame controllers into an Xbox pad; this file turns that pad
+# into the game's own keys. The mod's SteamVR layout (bindings_frame_controller.json) feeds UEVR the Frame's real
+# A / B / X / Y and its real D-pad.
+#
+#   Pad button         Key              In the game            Where it is on the Frame controllers
+#   RT                 left mouse       fire / use             gun-hand trigger
+#   LT                 right mouse      aim / second use       other-hand trigger
+#   A  B  X  Y         F  R  X  Space   interact, reload (hold = ammo type), fire mode, jump
+#   D-pad up / down    V / Tab          flashlight / inventory
+#   R3                 Left Ctrl        crouch                 right stick click
+#   Start              Esc              pause                  Menu
+#   Back               J                journal                View
+#   LB                 (empty)          this plugin's shift    left grip, squeezed fully
+#   LB + D-pad         5 6 7 8          utility slots          up, right, down, left
+#
+# Left EMPTY here on purpose, because sf_main.lua does them (the game needs more than a plain key press):
+#   RB (right bumper)       the G key, sent with its scan code: tap = pick up, hold = lower / raise the weapon
+#   L3 (left stick click)   Left Shift, sent with its scan code: sprint; in menus shift-click
+#   D-pad left / right      previous / next weapon
+#   left bumper, the grips, View with the left grip: see the mod's settings page or README
+# Both sticks are OFF here: sf_main.lua walks and turns; in menus the right stick scrolls (this plugin).
+# For a left-handed player plugins\a_sf_hand.dll swaps RT and LT before this plugin reads them.
+# UEVR's own menu: hold both stick clicks for a second.
+# ---------------------------------------------------------------------------
+
+GAMEPAD_RT=0x01
+GAMEPAD_LT=0x02
+# v6.6.8: RB (the right bumper) is now pressed as the real G key by sf_main.lua through sf_keys (hold = lower weapon)
+GAMEPAD_RB=
+GAMEPAD_LB=
+GAMEPAD_A=F
+GAMEPAD_B=R
+GAMEPAD_X=X
+GAMEPAD_Y=0x20
+GAMEPAD_L3=
+GAMEPAD_R3=0xA2
+GAMEPAD_START=0x1B
+GAMEPAD_BACK=J
+GAMEPAD_DPAD_UP=V
+GAMEPAD_DPAD_DOWN=0x09
+GAMEPAD_DPAD_LEFT=
+GAMEPAD_DPAD_RIGHT=
+GAMEPAD_LSTICK_UP=OFF
+GAMEPAD_LSTICK_DOWN=OFF
+GAMEPAD_LSTICK_LEFT=OFF
+GAMEPAD_LSTICK_RIGHT=OFF
+GAMEPAD_RSTICK_UP=OFF
+GAMEPAD_RSTICK_DOWN=OFF
+GAMEPAD_RSTICK_LEFT=OFF
+GAMEPAD_RSTICK_RIGHT=OFF
+
+LEFT_CONTROL_TO_HMD=
+RIGHT_CONTROL_TO_HMD=
+LEFT_RIGHT_CONTROL_TOUCH=
+
+# While the LEFT GRIP is held (shift layer): D-pad = utility slots 5 (up), 6 (right), 7 (down), 8 (left).
+GAMEPAD_LB_DPAD_UP=5
+GAMEPAD_LB_DPAD_RIGHT=6
+GAMEPAD_LB_DPAD_DOWN=7
+GAMEPAD_LB_DPAD_LEFT=8
+GAMEPAD_LB_START=0x1B
+GAMEPAD_LB_BACK=J
+GAMEPAD_LB_L3=
+GAMEPAD_LB_R3=0xA2
+GAMEPAD_LB_RT=0x01
+GAMEPAD_LB_RB=
+GAMEPAD_LB_A=F
+GAMEPAD_LB_B=R
+GAMEPAD_LB_X=X
+GAMEPAD_LB_Y=0x20
+GAMEPAD_LB_LSTICK_UP=OFF
+GAMEPAD_LB_LSTICK_DOWN=OFF
+GAMEPAD_LB_LSTICK_LEFT=OFF
+GAMEPAD_LB_LSTICK_RIGHT=OFF
+GAMEPAD_LB_RSTICK_UP=OFF
+GAMEPAD_LB_RSTICK_DOWN=OFF
+GAMEPAD_LB_RSTICK_LEFT=OFF
+GAMEPAD_LB_RSTICK_RIGHT=OFF
+GAMEPAD_LB_LT=0x02
+LEFT_CONTROL_LB_TO_HMD=
+RIGHT_CONTROL_LB_TO_HMD=
+LEFT_RIGHT_CONTROL_LB_TOUCH=
