@@ -1,0 +1,261 @@
+{
+   "alias_info": {},
+   "bindings": {
+      "/actions/default": {
+         "chords": [],
+         "haptics": [
+            {
+               "output": "/actions/default/out/haptic",
+               "path": "/user/hand/left/output/haptic"
+            },
+            {
+               "output": "/actions/default/out/haptic",
+               "path": "/user/hand/right/output/haptic"
+            }
+         ],
+         "poses": [
+            {
+               "output": "/actions/default/in/pose",
+               "path": "/user/hand/left/pose/tip"
+            },
+            {
+               "output": "/actions/default/in/pose",
+               "path": "/user/hand/right/pose/tip"
+            },
+            {
+               "output": "/actions/default/in/grippose",
+               "path": "/user/hand/left/pose/grip"
+            },
+            {
+               "output": "/actions/default/in/grippose",
+               "path": "/user/hand/right/pose/grip"
+            }
+         ],
+         "skeleton": [
+            {
+               "output": "/actions/default/in/skeletonrighthand",
+               "path": "/user/hand/right/input/skeleton/right"
+            },
+            {
+               "output": "/actions/default/in/skeletonlefthand",
+               "path": "/user/hand/left/input/skeleton/left"
+            }
+         ],
+         "sources": [
+            {
+               "path": "/user/hand/right/input/trigger",
+               "mode": "button",
+               "inputs": {
+                  "click": {
+                     "output": "/actions/default/in/trigger"
+                  }
+               }
+            },
+            {
+               "path": "/user/hand/left/input/trigger",
+               "mode": "button",
+               "inputs": {
+                  "click": {
+                     "output": "/actions/default/in/trigger"
+                  }
+               }
+            },
+            {
+               "path": "/user/hand/right/input/grip",
+               "mode": "button",
+               "inputs": {
+                  "click": {
+                     "output": "/actions/default/in/thumbresttouchright"
+                  }
+               },
+               "parameters": {
+                  "click_activate_threshold": "0.92",
+                  "click_deactivate_threshold": "0.8",
+                  "force_input": "value"
+               }
+            },
+            {
+               "path": "/user/hand/right/input/grip",
+               "mode": "button",
+               "parameters": {
+                  "click_activate_threshold": "0.3",
+                  "click_deactivate_threshold": "0.2",
+                  "force_input": "value"
+               },
+               "inputs": {
+                  "click": {
+                     "output": "/actions/default/in/bbuttontouchright"
+                  }
+               }
+            },
+            {
+               "path": "/user/hand/left/input/grip",
+               "mode": "button",
+               "inputs": {
+                  "click": {
+                     "output": "/actions/default/in/grip"
+                  }
+               },
+               "parameters": {
+                  "click_activate_threshold": "0.92",
+                  "click_deactivate_threshold": "0.8",
+                  "force_input": "value"
+               }
+            },
+            {
+               "path": "/user/hand/left/input/grip",
+               "mode": "button",
+               "parameters": {
+                  "click_activate_threshold": "0.3",
+                  "click_deactivate_threshold": "0.2",
+                  "force_input": "value"
+               },
+               "inputs": {
+                  "click": {
+                     "output": "/actions/default/in/bbuttontouchleft"
+                  }
+               }
+            },
+            {
+               "path": "/user/hand/right/input/a",
+               "mode": "button",
+               "inputs": {
+                  "click": {
+                     "output": "/actions/default/in/abuttonright"
+                  }
+               }
+            },
+            {
+               "path": "/user/hand/right/input/b",
+               "mode": "button",
+               "inputs": {
+                  "click": {
+                     "output": "/actions/default/in/abuttonleft"
+                  }
+               }
+            },
+            {
+               "path": "/user/hand/right/input/x",
+               "mode": "button",
+               "inputs": {
+                  "click": {
+                     "output": "/actions/default/in/bbuttonright"
+                  }
+               }
+            },
+            {
+               "path": "/user/hand/right/input/y",
+               "mode": "button",
+               "inputs": {
+                  "click": {
+                     "output": "/actions/default/in/bbuttonleft"
+                  }
+               }
+            },
+            {
+               "path": "/user/hand/right/input/bumper",
+               "mode": "button",
+               "inputs": {
+                  "click": {
+                     "output": "/actions/default/in/grip"
+                  }
+               }
+            },
+            {
+               "path": "/user/hand/left/input/bumper",
+               "mode": "button",
+               "inputs": {
+                  "click": {
+                     "output": "/actions/default/in/thumbresttouchleft"
+                  }
+               }
+            },
+            {
+               "path": "/user/hand/left/input/view",
+               "mode": "button",
+               "inputs": {
+                  "click": {
+                     "output": "/actions/default/in/abuttontouchleft"
+                  }
+               }
+            },
+            {
+               "path": "/user/hand/right/input/menu",
+               "mode": "button",
+               "inputs": {
+                  "click": {
+                     "output": "/actions/default/in/systembutton"
+                  }
+               }
+            },
+            {
+               "path": "/user/hand/left/input/dpad_up",
+               "mode": "button",
+               "inputs": {
+                  "click": {
+                     "output": "/actions/default/in/dpad_up"
+                  }
+               }
+            },
+            {
+               "path": "/user/hand/left/input/dpad_down",
+               "mode": "button",
+               "inputs": {
+                  "click": {
+                     "output": "/actions/default/in/dpad_down"
+                  }
+               }
+            },
+            {
+               "path": "/user/hand/left/input/dpad_left",
+               "mode": "button",
+               "inputs": {
+                  "click": {
+                     "output": "/actions/default/in/dpad_left"
+                  }
+               }
+            },
+            {
+               "path": "/user/hand/left/input/dpad_right",
+               "mode": "button",
+               "inputs": {
+                  "click": {
+                     "output": "/actions/default/in/dpad_right"
+                  }
+               }
+            },
+            {
+               "path": "/user/hand/left/input/thumbstick",
+               "mode": "joystick",
+               "inputs": {
+                  "click": {
+                     "output": "/actions/default/in/joystickclick"
+                  },
+                  "position": {
+                     "output": "/actions/default/in/joystick"
+                  }
+               }
+            },
+            {
+               "path": "/user/hand/right/input/thumbstick",
+               "mode": "joystick",
+               "inputs": {
+                  "click": {
+                     "output": "/actions/default/in/joystickclick"
+                  },
+                  "position": {
+                     "output": "/actions/default/in/joystick"
+                  }
+               }
+            }
+         ]
+      }
+   },
+   "controller_type": "frame_controller",
+   "description": "Project Silverfish VR by Blind. A / B / X / Y = interact, reload, fire mode, jump. D-pad = flashlight, inventory, previous / next weapon. Triggers = fire and aim. Right bumper = pick up (hold = lower the weapon), left bumper = weapon light / laser, pry, harvest. Grips = two-handed hold, crouch-jump (with Y), utility slots (left grip, squeezed fully, + D-pad). Left stick click = sprint, right stick click = crouch, Menu = pause, View = journal. The full list is in the mod's README and on its settings page in UEVR's menu.",
+   "name": "Project Silverfish VR - Steam Frame (by Blind)",
+   "options": {},
+   "simulated_actions": [],
+   "category": "steamvr_input",
+   "interaction_profile": ""
+}
