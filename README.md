@@ -21,7 +21,6 @@ Nothing in the game's own folder is changed and your saves are never touched. Th
 - The game's HUD inside your helmet, plus a small dot that shows where your gun hand points.
 - Menus, inventory, traders and terminals as panels in the world, used with a pointer from your hand. An on-screen keyboard comes up for terminals and text boxes.
 - A fade to black through level loads, and your height reset at every level start.
-- Sound that is heard from your head, not from the gun.
 - A left-handed mode (experimental).
 - Four graphics presets you can step through from inside the headset.
 - Its own settings page in UEVR's menu.
@@ -98,13 +97,10 @@ These are the mod's own, so they are worth reading once.
 | Left trigger, while your left hand holds the flashlight | Switches the flashlight between its two holds: a torch (beam where the hand points) and a raised hold for a hand held up by your head. |
 | Both stick clicks, held for a second | UEVR's own menu. |
 
-Things people ask about:
+Things people will ask about:
 
 - **Is my crouch-jump broken?** Probably not. The game lets you jump less high when your character is hungry. Eat something and try again.
-- **The grips have two stages.** A light squeeze is enough for two-handed and for crouch-jump. The utility slots, the graphics preset and shift-click want the left grip squeezed all the way.
 - **Throwing.** While you carry an object, the trigger throws it where your hand points. Swing your hand as you pull and it flies harder.
-- **Trading: Add Money.** The game's Add Money is a slider under your pointer: move the pointer left or right until the balance pointer is past the trader's first mark, then click. If you would rather have the mod set the amount, there is a switch for that under [Optional extras](#optional-extras).
-- **The game's on-screen hints show keyboard keys.** They are the game's own texts. Use the table above.
 
 ### Left-handed
 
