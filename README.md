@@ -8,6 +8,8 @@ It is built for the **Steam Frame** and its controllers, running through **Steam
 
 Nothing in the game's own folder is changed and your saves are never touched. The mod lives entirely in UEVR's profile folder for the game.
 
+https://github.com/user-attachments/assets/7f0f3896-5331-4986-bb39-85ec00a618ea
+
 ---
 
 ## Fixes
