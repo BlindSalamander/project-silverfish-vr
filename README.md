@@ -57,7 +57,7 @@ Every weapon and tool on the game's test map was fired or used in the headset fo
 ## Install
 
 1. **Launch option.** In Steam: right-click Project Silverfish → Properties → General → Launch Options, and type `-dx11`.
-2. **Import the profile.** Download `SilverFish-Win64-Shipping.zip` from the Releases page. Start `UEVRInjector.exe`, click **Import Config** and pick the zip. Do not rename it: UEVR uses the file name as the game's folder name. (If your browser saved it as `SilverFish-Win64-Shipping (1).zip`, rename it back first.) UEVR asks whether you trust a profile that contains DLL plugins. That is expected (what each one does is listed under [What is in the package](#what-is-in-the-package)); answer Yes.
+2. **Import the profile.** Download `SilverFish-Win64-Shipping.zip` from the [latest release](https://github.com/BlindSalamander/project-silverfish-vr/releases/latest). Start `UEVRInjector.exe`, click **Import Config** and pick the zip. Do not rename it: UEVR uses the file name as the game's folder name. (If your browser saved it as `SilverFish-Win64-Shipping (1).zip`, rename it back first.) UEVR asks whether you trust a profile that contains DLL plugins. That is expected (what each one does is listed under [What is in the package](#what-is-in-the-package)); answer Yes.
 3. **Start SteamVR**, put the headset on, then **start the game** and wait for its main menu.
 4. **Inject.** In UEVRInjector pick the process `SilverFish-Win64-Shipping`, make sure the runtime is **OpenVR**, and click Inject.
 5. **Click once on the game's window** on the desktop, so Windows sends it keyboard and mouse input. The game is keyboard-and-mouse only; the mod presses its keys for you, and Windows only delivers those to the window in front.
