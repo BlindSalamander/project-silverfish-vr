@@ -1,12 +1,22 @@
 # Project Silverfish VR
 
-**Version 1.0 (build 6.6.52) · by Blind**
+**Version 1.0.1 (build 6.6.55) · by Blind**
 
 A UEVR profile that turns [Project Silverfish](https://store.steampowered.com/app/2941710/Project_Silverfish) into a motion-controlled VR game. Your two hands are tracked, the gun sits in your hand and shoots where its barrel points, long guns can be held with both hands, your body follows your head around the room, the HUD sits inside your helmet, and every menu is a panel in front of you that you point at.
 
 It is built for the **Steam Frame** and its controllers, running through **SteamVR**. Nothing else is supported in this version.
 
 Nothing in the game's own folder is changed and your saves are never touched. The mod lives entirely in UEVR's profile folder for the game.
+
+---
+
+## Fixes
+
+**1.0.1**
+
+- **Scopes while you move.** On every scoped gun, the dark inside of the scope and the picture in it slid out of the tube whenever you walked, strafed or sprinted with the scope up, and sat right again when you stood still. It now stays in the scope.
+
+Coming from 1.0: import the new zip the same way. Your settings are kept.
 
 ---
 
@@ -21,6 +31,7 @@ Nothing in the game's own folder is changed and your saves are never touched. Th
 - The game's HUD inside your helmet, plus a small dot that shows where your gun hand points.
 - Menus, inventory, traders and terminals as panels in the world, used with a pointer from your hand. An on-screen keyboard comes up for terminals and text boxes.
 - A fade to black through level loads, and your height reset at every level start.
+- Sound that is heard from your head, not from the gun.
 - A left-handed mode (experimental).
 - Four graphics presets you can step through from inside the headset.
 - Its own settings page in UEVR's menu.
@@ -36,7 +47,7 @@ Every weapon and tool on the game's test map was fired or used in the headset fo
 | Game | Project Silverfish on Steam. Tested with the public build of 10 November 2026. The game is in Early Access; an update can break the mod. |
 | UEVR | The **nightly** build from praydog's GitHub ([UEVR-nightly releases](https://github.com/praydog/UEVR-nightly/releases)). Tested with nightly 01143, commit `4ee5c6b` (UEVR's window title shows `1.05+195-4ee5c6b6`). The 2024 "stable" UEVR is too old. UEVR is not included here. |
 | VR runtime | **SteamVR** (OpenVR). The profile selects it. OpenXR is not supported. |
-| Headset | **Steam Frame with its own controllers.** The layout uses a D-pad, four face buttons on one hand, bumpers and two-stage grips. Other controllers are not supported in 1.0. |
+| Headset | **Steam Frame with its own controllers.** The layout uses a D-pad, four face buttons on one hand, bumpers and two-stage grips. Other controllers are not supported. |
 | Renderer | **DirectX 11.** The game must be started with `-dx11` (see Install). DirectX 12 gave UEVR errors with this game during development. |
 | Key bindings | The game's **default** keyboard bindings (see the note under Controls). |
 | PC | A fast one. Frame rates on an RTX 5080 are in [Graphics presets](#graphics-presets). |
@@ -97,10 +108,13 @@ These are the mod's own, so they are worth reading once.
 | Left trigger, while your left hand holds the flashlight | Switches the flashlight between its two holds: a torch (beam where the hand points) and a raised hold for a hand held up by your head. |
 | Both stick clicks, held for a second | UEVR's own menu. |
 
-Things people will ask about:
+Things people ask about:
 
 - **Is my crouch-jump broken?** Probably not. The game lets you jump less high when your character is hungry. Eat something and try again.
+- **The grips have two stages.** A light squeeze is enough for two-handed and for crouch-jump. The utility slots, the graphics preset and shift-click want the left grip squeezed all the way.
 - **Throwing.** While you carry an object, the trigger throws it where your hand points. Swing your hand as you pull and it flies harder.
+- **Trading: Add Money.** The game's Add Money is a slider under your pointer: move the pointer left or right until the balance pointer is past the trader's first mark, then click. If you would rather have the mod set the amount, there is a switch for that under [Optional extras](#optional-extras).
+- **The game's on-screen hints show keyboard keys.** They are the game's own texts. Use the table above.
 
 ### Left-handed
 
@@ -243,7 +257,6 @@ When the frame rate is below your headset's refresh rate, the pointer dot and cl
 - **Binoculars do not work in VR.** Raise them to look and they disappear.
 - **The photo camera has no viewfinder.** Photos themselves work and are taken from where your hand holds the camera. Holding aim hides it, like the binoculars.
 - **The trade screen's money slider takes a steady hand** with a VR pointer. There is an optional helper for it; see [Optional extras](#optional-extras).
-- **A sight or scope can trail the gun slightly while you move.** In the game the optic is a separate part from the gun.
 - **UEVR's own menu is always operated with the right controller**, also in left-handed mode. It is UEVR's pointer, not the mod's.
 - **Two short hitches in the main menu** in the first seconds after injecting.
 - **Objects pop in at a distance.** That is the game's level-of-detail system, more visible in VR.
@@ -281,7 +294,7 @@ Open an issue on this repository, or post in the mod's thread on the Flat2VR Dis
 
 Please include:
 
-1. The **build number** from the top of the settings page (for this release: 1.0, build 6.6.52), and your UEVR build.
+1. The **build number** from the top of the settings page (for this release: 1.0.1, build 6.6.55), and your UEVR build.
 2. Your headset, GPU and CPU, and which **graphics preset** you were on.
 3. What happened, and roughly when in the session (minutes after starting).
 4. The two log files from `%APPDATA%\UnrealVRMod\SilverFish-Win64-Shipping\`: **`data\sf_main_log.txt`** (the mod's log) and **`log.txt`** (UEVR's log).

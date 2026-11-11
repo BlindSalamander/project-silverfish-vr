@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.1 (build 6.6.55) - 10 November 2026
+
+**Fixed**
+
+- **Scopes while you move.** On every scoped gun, the dark inside of the scope and the picture in it slid out of the tube whenever you walked, strafed or sprinted with the scope up, and sat right again when you stood still. The game works out where a scope's lens is once per frame, before the mod has put the gun in your hand, and the inside of the scope was drawn at that earlier spot: up to 3 cm beside a lens 2.6 cm in radius. The mod now sets the lens position again from the gun as it is drawn.
+
+**Coming from 1.0:** import the new zip the same way. Your settings are kept. Only `scripts\sf_main.lua` and the texts changed.
+
 ## 1.0 (build 6.6.52) - 10 November 2026
 
 The first public release. The mod was developed privately up to build 6.6.51; this is what it does on the day it went public.
