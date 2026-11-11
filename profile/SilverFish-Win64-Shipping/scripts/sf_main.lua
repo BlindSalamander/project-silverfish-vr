@@ -19,7 +19,9 @@
 --            where the barrel points; while sprinting it follows the head (the game's forward key moves along its look).
 --   Sights   A sight's dot is a post-process material carrying the sight's Right / Down axes, written by the game from
 --            the recoil-kicked pose. They are rewritten every frame from the gun as drawn, aimed at where the barrel
---            line hits (V62.sight_fix; values read through sf_mat.dll).
+--            line hits (V62.sight_fix; values read through sf_mat.dll). The dark inside of a scope and the picture
+--            in it are drawn from values the scope writes once per game update (where its lens part is in the world);
+--            they are written again from the gun as drawn, in both eye passes (V62.lens_vals).
 --   Body     View from our own body yaw (stick turning) + the headset; walking through the game's own Move input,
 --            relative to the head; height reset at level start (standing height if you are bent down at that moment).
 --   HUD      The game's HUD widget is taken onto a panel in the world (helmet HUD in front of the eyes; the aiming
@@ -44,8 +46,8 @@
 --   uevr.api:method(...)            vr.<fn>(...) for all VR functions EXCEPT vr:get_mod_value(name)
 --   UEVR_UObjectHook.<fn>(...)      object:Method(...) for game objects      fs. / imgui. with a dot
 
-local SF_VERSION = "6.6.52"          -- the build number: say it in a bug report
-local SF_RELEASE = "1.0"             -- the published version
+local SF_VERSION = "6.6.55"          -- the build number: say it in a bug report
+local SF_RELEASE = "1.0.1"           -- the published version
 
 local function sf_main_body()
 
@@ -179,6 +181,7 @@ local S = {
     hud_ring_separate = true,    -- v6.6.29: the aiming ring on its own panel where your hand points
     sight_fix = true,            -- v6.6.38: the sight's crosshair axes (Right/Down) rewritten from the gun as drawn, every frame
     sight_impact = true,         -- v6.6.39: the dot points where the barrel line hits (the shot lands there), not parallel above it
+    scope_lens = true,           -- v6.6.55: the inside of a scope (the game's lens values) follows the gun as drawn, every frame
     sight_trim_deg = 0.0,        -- v6.6.39: manual dot trim, degrees (+ = dot higher -> shots land lower; - = dot lower)
     hud_ads_crosshair = false,   -- v6.6.32: the game's ADS crosshair shown only when the game shows it (LT) - used when pointer_dot is off
     pointer_dot = true,          -- v6.6.41: the small dot where your hand points, always on (the tester: "you need to know where you're pointing")
@@ -570,6 +573,7 @@ local function place_hands(view_index, w2m, pos, rot)
     -- used for the gun hold here and for the hand points further down.
     local gun_whole = cur ~= nil and alive(cur.actor) and alive(cur.mesh)
     if view_index == 0 and gun_whole and V62.ua.on then pcall(UEVR_UObjectHook.remove_motion_controller_state, cur.mesh) end
+    if view_index == 0 and gun_whole then guarded("scopelens", V62.lens_vals, 0, 0) end   -- v6.6.55: the scope's lens part as the game's update left it
     if gun_whole and view_index <= 1 then pcall(V62.gun_hold, view_index) end      -- the gun stays in the hand, in both eye passes
     if view_index == 0 and gun_whole then guarded("sightfix", V62.sight_fix) end
     -- v4.9: the game's HUD floats straight ahead of your eyes, at the distance of whatever you look at (so walls never
@@ -767,6 +771,8 @@ local function place_hands(view_index, w2m, pos, rot)
             end
         end
     end
+    -- v6.6.55: the gun is in the hand now: the game's lens values are written again from the scope as it will be drawn
+    if gun_whole and view_index <= 1 then guarded("scopelens", V62.lens_vals, 1, view_index) end
     track.applied = track.applied + 1
 end
 
@@ -3991,6 +3997,7 @@ function V62.gun_hold(pass)
         return
     end
     gun_put(g)
+    V62.gh_put = V62.fno                                        -- v6.6.55: the game moved the gun in this frame (V62.lens_vals)
     if pass == 0 then
         local e = V62.gs
         if e == nil or T - e.t > 0.5 then e = { t0 = T, t = T, cm = 0, deg = 0, n = 0, cls = cur.cls }; V62.gs = e end
@@ -5380,6 +5387,176 @@ function V62.sight_fix()                                       -- first eye pass
         if X.fail >= 20 then S.sight_fix = false; LOG("red dot: crosshair fix switched itself off after 20 failed writes") end
     end
 end
+-- v6.6.55 (release 1.0.1): A SCOPE'S LENS PICTURE STAYS IN ITS SCOPE. The sixth playtest (v6.6.52 = release 1.0): "when
+-- you're standing still the scope works, but any time you're in movement the scope loses its connection to the gun ...
+-- it's the shading that makes it look like you're looking down a barrel that moves ... all scoped weapons".
+-- What draws it (measured with the test build v6.6.54-test): no part of the scope moves. The dark inside of the tube
+-- and the picture in it are drawn by the scope's materials from values in the game's material collection MPC_Weapons:
+--   LenseLocation = where the scope's "Lense" part is in the world, LenseNormal / LenseRight = its forward and right
+--   axes, LenseSize, LenseRadius (2.6 cm on the ACOG).
+-- The scope's own script (Scope_Master_BP, its ReceiveTick) writes them once per game update, from the gun as that
+-- update left it. This script then places the gun in your hand for the picture. Standing, that is the same place.
+-- Walking it is not: your hands ride on the game's camera, and the camera's lag behind the body changes with every
+-- frame time - measured 0.6 cm (90 pictures a second) to 1.9 cm (45 a second) per frame, up to 3 cm. The lens
+-- picture stayed where the update had the gun: beside a lens 2.6 cm in radius.
+-- In that test the picture sat in the tube only while LenseLocation was written again from the gun as drawn (0.06 cm
+-- off) or while the scope's own update was run again after the placing; room-scale off, the camera pivot of v6.6.50,
+-- our red-dot correction off and pinning or hiding the scope's parts changed nothing.
+-- Now, every frame a gun with such a scope is held:
+--   first eye pass, before anything is moved: the Lense part's place and axes are noted (as the update left them);
+--   once per scope class: the game's three values are looked at in that part's own frame - three frames in a row that
+--     agree (frames in which the game itself moved the gun - recoil - are left out) are how the game derives them
+--     (place 0 0 0, the part's forward, its right on the scopes seen so far);
+--   after the gun is placed, both eye passes: the three values are written again from the part as it will be drawn.
+-- Until the relation is known nothing is written. LenseSize / LenseRadius stay the game's. The game writes its own
+-- values again in its next update, so nothing is left behind when this is switched off (setting scope_lens).
+V62.lv = { map = {}, st = { n = 0, sum = 0, max = 0 } }
+function V62.lv_read(c)                                        -- a part's place and axes in the world, or nil
+    local l = safe(function() return c:K2_GetComponentLocation() end)
+    local r = safe(function() return c:K2_GetComponentRotation() end)
+    if l == nil or r == nil then return nil end
+    local F, R, U = rot_axes(r.Pitch or 0, r.Yaw or 0, r.Roll or 0)
+    return { l.X or 0, l.Y or 0, l.Z or 0 }, F, R, U
+end
+function V62.lv_get(pawn, mpc, name)                           -- one of the game's values: { x, y, z, a } or nil
+    local v = safe(function() return G.KMatL:GetVectorParameterValue(pawn, mpc, name) end)
+    if v == nil then return nil end
+    return { v.R or 0, v.G or 0, v.B or 0, v.A or 0 }
+end
+function V62.lv_snap(v)                                        -- 0.999.. of an axis is that axis; a hair off zero is zero
+    local out = {}
+    for i = 1, 3 do
+        local x = v[i]
+        if math.abs(x) < 0.004 then x = 0 elseif math.abs(x - 1) < 0.004 then x = 1 elseif math.abs(x + 1) < 0.004 then x = -1 end
+        out[i] = x
+    end
+    return out
+end
+function V62.lens_vals(stage, pass)                            -- per-eye callback: stage 0 before the gun is placed (first eye), 1 after
+    local X = V62.lv
+    if S.scope_lens == false or X.off or cur == nil or not lvl.ready or G.Vec == nil or G.LinColor == nil then return end
+    if not V62.bino_libs() then return end                        -- the component classes (G.CAC) must be known
+    if X.actor ~= cur.actor then
+        X.actor, X.lens, X.cls, X.rel, X.cand, X.p0, X.find_t, X.tries, X.ltries = cur.actor, nil, nil, nil, nil, nil, 0, 0, 0
+    end
+    -- the held gun's scope: a child actor with a "Lense" part (looked for when the gun is taken, then a few times more)
+    if X.lens == nil then
+        if stage ~= 0 or T < X.find_t then return end
+        X.tries = X.tries + 1
+        X.find_t = T + ((X.tries <= 3) and 1.0 or 10.0)
+        local comps = safe(function() return cur.actor:K2_GetComponentsByClass(G.CAC) end)
+        if type(comps) == "table" then
+            for _, c in ipairs(comps) do
+                local a = safe(function() return c.ChildActor end)
+                local lens = a and safe(function() return a.Lense end)
+                if lens ~= nil and alive(lens) then
+                    X.lens, X.cls = lens, shortclass(a)
+                    X.rel = X.map[X.cls]
+                    break
+                end
+            end
+        end
+        if X.lens == nil then return end
+    end
+    if not obj_ok(X.lens) then X.lens = nil; return end
+    -- the game's collection of weapon material values
+    if X.mpc == nil or not obj_ok(X.mpc) then
+        if stage ~= 0 or T < (X.mpc_t or 0) then return end
+        X.mpc_t, X.mpc = T + 5.0, nil
+        G.KMatL = G.KMatL or (function() local c = api:find_uobject("Class /Script/Engine.KismetMaterialLibrary"); return c and c:get_class_default_object() end)()
+        local cls = api:find_uobject("Class /Script/Engine.MaterialParameterCollection")
+        local objs = cls and safe(function() return UEVR_UObjectHook.get_objects_by_class(cls, false) end)
+        if type(objs) == "table" then
+            for _, o in ipairs(objs) do
+                if safe(function() return o:get_fname():to_string() end) == "MPC_Weapons" then X.mpc = o; break end
+            end
+        end
+        if X.mpc == nil or G.KMatL == nil then
+            X.mpc = nil
+            if not X.nompc then X.nompc = true; LOG("scope lens: the game's weapon material values (MPC_Weapons) were not found - scopes stay as the game has them") end
+            return
+        end
+    end
+    local pawn = (body ~= nil and body.pawn) or vguard.pawn
+    if pawn == nil or not obj_ok(pawn) then return end
+    local lp, F, Rt, U = V62.lv_read(X.lens)
+    if lp == nil then return end
+    if stage == 0 then                                         -- as the game's update left it
+        X.p0 = { lp, F, Rt, U, V62.fno }
+        return
+    end
+    local rel = X.rel
+    if rel == nil then
+        -- how does the game derive its values from the part? (first eye pass, a frame the game did not move the gun in)
+        local p0 = X.p0
+        if pass ~= 0 or p0 == nil or p0[5] ~= V62.fno or V62.gh_put == V62.fno then return end
+        local gl, gn, gr = V62.lv_get(pawn, X.mpc, "LenseLocation"), V62.lv_get(pawn, X.mpc, "LenseNormal"), V62.lv_get(pawn, X.mpc, "LenseRight")
+        if gl == nil or gn == nil or gr == nil then return end
+        local p, f, r, u = p0[1], p0[2], p0[3], p0[4]
+        local function into(v, ox, oy, oz)
+            local x, y, z = v[1] - ox, v[2] - oy, v[3] - oz
+            return { x * f[1] + y * f[2] + z * f[3], x * r[1] + y * r[2] + z * r[3], x * u[1] + y * u[2] + z * u[3] }
+        end
+        local function len(v) return math.sqrt(v[1] * v[1] + v[2] * v[2] + v[3] * v[3]) end
+        local function far(a, b) return math.abs(a[1] - b[1]) + math.abs(a[2] - b[2]) + math.abs(a[3] - b[3]) end
+        local now = { p = into(gl, p[1], p[2], p[3]), n = into(gn, 0, 0, 0), r = into(gr, 0, 0, 0) }
+        local dist, ln, lr = len(now.p), len(now.n), len(now.r)
+        local sane = dist < 30 and ln > 0.98 and ln < 1.02 and lr > 0.98 and lr < 1.02
+        local c = X.cand
+        if sane and c ~= nil and far(now.p, c.p) < 0.2 and far(now.n, c.n) < 0.01 and far(now.r, c.r) < 0.01 then c.k = c.k + 1
+        else c = sane and { p = now.p, n = now.n, r = now.r, k = 1 } or nil end
+        X.cand = c
+        X.ltries = X.ltries + 1
+        if c ~= nil and c.k >= 3 then
+            rel = { p = (len(c.p) < 0.15) and { 0, 0, 0 } or c.p, n = V62.lv_snap(c.n), r = V62.lv_snap(c.r), al = gl[4], an = gn[4], ar = gr[4] }
+            X.rel, X.cand = rel, nil
+            X.map[X.cls] = rel
+            LOG(string.format("scope lens: %s on %s - the game draws the inside of the scope from where its lens part was after the game's update (%.1f %.1f %.1f cm from the part, facing %.2f %.2f %.2f, right %.2f %.2f %.2f in the part's own directions); set from the gun as drawn from now on, every frame",
+                X.cls, cur.cls, rel.p[1], rel.p[2], rel.p[3], rel.n[1], rel.n[2], rel.n[3], rel.r[1], rel.r[2], rel.r[3]))
+        else
+            if not sane and X.ltries == 300 then
+                LOG(string.format("scope lens: %s on %s - the game's lens values do not describe this scope's lens part (%.0f cm away, lengths %.2f %.2f) - left as the game has them", X.cls, cur.cls, dist, ln, lr))
+            end
+            return
+        end
+    end
+    -- the three values, from the part as it will be drawn
+    local wl = { lp[1] + F[1] * rel.p[1] + Rt[1] * rel.p[2] + U[1] * rel.p[3], lp[2] + F[2] * rel.p[1] + Rt[2] * rel.p[2] + U[2] * rel.p[3], lp[3] + F[3] * rel.p[1] + Rt[3] * rel.p[2] + U[3] * rel.p[3] }
+    local wn = { F[1] * rel.n[1] + Rt[1] * rel.n[2] + U[1] * rel.n[3], F[2] * rel.n[1] + Rt[2] * rel.n[2] + U[2] * rel.n[3], F[3] * rel.n[1] + Rt[3] * rel.n[2] + U[3] * rel.n[3] }
+    local wr = { F[1] * rel.r[1] + Rt[1] * rel.r[2] + U[1] * rel.r[3], F[2] * rel.r[1] + Rt[2] * rel.r[2] + U[2] * rel.r[3], F[3] * rel.r[1] + Rt[3] * rel.r[2] + U[3] * rel.r[3] }
+    -- for the log, once: how far the game's value was from the gun as drawn while you moved (the first 600 such frames)
+    local st = X.st
+    if pass == 0 and st.n < 600 then
+        local vel = safe(function() return pawn:GetVelocity() end)
+        if vel ~= nil and (vel.X or 0) ^ 2 + (vel.Y or 0) ^ 2 + (vel.Z or 0) ^ 2 > 100 * 100 then
+            local gl = V62.lv_get(pawn, X.mpc, "LenseLocation")
+            if gl ~= nil then
+                local d = math.sqrt((gl[1] - wl[1]) ^ 2 + (gl[2] - wl[2]) ^ 2 + (gl[3] - wl[3]) ^ 2)
+                if d < 50 then
+                    st.n, st.sum = st.n + 1, st.sum + d
+                    if d > st.max then st.max = d end
+                    if st.n == 600 then
+                        LOG(string.format("scope lens: over 600 frames of walking the game's values had the lens %.1f cm on average and up to %.1f cm from the gun as drawn (a scope's lens is about 2.6 cm in radius) - they were set from the gun as drawn each time",
+                            st.sum / st.n, st.max))
+                    end
+                end
+            end
+        end
+    end
+    X.c = X.c or StructObject.new(G.LinColor)
+    local c = X.c
+    local function put(name, v, a)
+        c.R, c.G, c.B, c.A = v[1], v[2], v[3], a
+        return (pcall(function() G.KMatL:SetVectorParameterValue(pawn, X.mpc, name, c) end))
+    end
+    local ok1, ok2, ok3 = put("LenseLocation", wl, rel.al), put("LenseNormal", wn, rel.an), put("LenseRight", wr, rel.ar)
+    X.n = (X.n or 0) + 1
+    if not (ok1 and ok2 and ok3) then
+        X.fail = (X.fail or 0) + 1
+        if X.fail <= 2 then LOG("scope lens: could not write the game's lens values (" .. tostring(ok1) .. "/" .. tostring(ok2) .. "/" .. tostring(ok3) .. ")") end
+        if X.fail >= 20 then X.off = true; LOG("scope lens: switched itself off after 20 failed writes - scopes are as the game has them") end
+    end
+end
 -- v6.6.45 TEST: YOUR BODY FOLLOWS YOUR HEAD (room-scale). The game's body only moved with the stick; stepping or leaning
 -- moved your eyes and hands but not the body, and the game decides from the BODY what you can reach, whether your gun
 -- is blocked by a wall (no shot, empty scope) and where enemies hit you (playtest 31:10-33:24, 40:05-40:42). UEVR has
@@ -5565,6 +5742,8 @@ local function draw_panel()
         if changed then S.gun_hold_still = val; save_settings() end
         changed, val = imgui.checkbox("Gun put back in the hand in both eye passes", S.gun_hold_both ~= false)
         if changed then S.gun_hold_both = val; save_settings() end
+        changed, val = imgui.checkbox("Scopes: the inside of the scope follows the gun as drawn (off = as the game has it)", S.scope_lens ~= false)
+        if changed then S.scope_lens = val; save_settings() end
         changed, val = imgui.checkbox("Keep UEVR's own 'attach to controller' off the gun the mod holds", S.uevr_attach_guard ~= false)
         if changed then S.uevr_attach_guard = val; save_settings() end
         if V62.ua.logged then imgui.text(string.format("   UEVR attachment on %s: taken off every frame (moved the gun %d times)", tostring(V62.ua.cls), V62.ua.moved or 0)) end
