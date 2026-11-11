@@ -1,4 +1,4 @@
-Project Silverfish VR 1.0 (build 6.6.52) by Blind
+Project Silverfish VR 1.0.1 (build 6.6.55) by Blind
 
 Full motion-controlled VR for Project Silverfish: tracked hands, guns held and aimed in the hand, two-handed long guns, room-scale body, helmet HUD, pointer menus, an on-screen keyboard for terminals, a left-handed mode and four graphics presets.
 
