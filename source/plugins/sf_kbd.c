@@ -16,6 +16,11 @@
  *     dispatch_custom_event("sfkbd", "fade <seconds> <alpha 0-1>")   -- 1 = black, 0 = back to the game
  * The compositor keeps fading even while the game is frozen loading. Safety: a black fade that isn't renewed
  * ("fade ... 1" again) within 25 s is undone by the plugin itself, and "fade" with alpha 0 always clears it.
+ *
+ * v4 (2026-11-14): survives UEVR restarting OpenVR mid-session (its interfaces were cached for good and then pointed into
+ * an unloaded vrclient: checked every tick through OpenVR's init token, fetched again at the next show / fade). A failed
+ * start is tried again after 3 s instead of never. Keys typed while the game window is not in front are still dropped
+ * (they would land in another program), but the script is now told once per keyboard: "nofocus".
  */
 #include <windows.h>
 #include <stdio.h>
@@ -44,6 +49,15 @@ static float g_fwd = 0.55f, g_down = 0.40f, g_tilt = 0.61f;   /* v3: set by "pla
 static DWORD g_last_nl = 0;
 static int g_nev = 0;
 static char g_err[160];
+static uint32_t g_token = 0;      /* v4: OpenVR's init token when the interfaces were fetched */
+static DWORD g_try = 0;           /* v4: when init last failed */
+static int g_nofocus = 0;         /* v4: "nofocus" told for this keyboard */
+typedef uint32_t (*PFN_TOK)(void);
+static uint32_t vr_token(void) {  /* changes whenever OpenVR is shut down or started again */
+    static PFN_TOK f = NULL;
+    if (f == NULL) { HMODULE h = GetModuleHandleA("openvr_api.dll"); f = h ? (PFN_TOK)(void*)GetProcAddress(h, "VR_GetInitToken") : NULL; }
+    return f ? f() : 0;
+}
 
 static void logi(const char* fmt, const char* a) {
     char b[400];
@@ -66,8 +80,9 @@ static int init_vr(void) {
     EVRInitError e = EVRInitError_VRInitError_None;
     char name[96];
     EVROverlayError oe;
-    if (g_ready >= 0) return g_ready;
-    g_ready = 0;
+    if (g_ready == 1) return 1;
+    if (g_ready == 0 && GetTickCount() - g_try < 3000) return 0;   /* v4: a failed start is tried again after 3 s */
+    g_ready = 0; g_try = GetTickCount(); g_err[0] = 0;
     h = GetModuleHandleA("openvr_api.dll");
     if (h == NULL) { snprintf(g_err, sizeof(g_err), "openvr_api.dll not loaded (UEVR not on OpenVR?)"); return 0; }
     ggi = (PFN_GGI)(void*)GetProcAddress(h, "VR_GetGenericInterface");
@@ -88,6 +103,7 @@ static int init_vr(void) {
         oe = OV->CreateOverlay("silverfish.vr.keyboard", "Silverfish VR keyboard", &g_ov);
         if (oe != EVROverlayError_VROverlayError_None) { snprintf(g_err, sizeof(g_err), "CreateOverlay error %d", (int)oe); g_ov = 0; return 0; }
     }
+    g_token = vr_token();
     g_ready = 1;
     logi("[sf_kbd] ready - SteamVR keyboard available%s", SYS ? "" : " (placement: SteamVR default)");
     return 1;
@@ -158,6 +174,14 @@ static void type_char(WCHAR ch) {
     } else send_unicode(ch);
 }
 
+static int vr_stale(void) {       /* v4: UEVR restarted OpenVR - everything we hold points into the old client */
+    if (g_ready != 1 || vr_token() == g_token) return 0;
+    OV = NULL; SYS = NULL; COMP = NULL; g_ov = 0; g_ready = -1; g_faded = 0;
+    logi("[sf_kbd] SteamVR was restarted by UEVR - keyboard and fades reconnect at the next use%s", "");
+    if (g_shown) { g_shown = 0; tell("err SteamVR restarted"); }
+    return 1;
+}
+
 static void hide_kb(void) {
     if (g_ready == 1 && g_shown && OV->HideKeyboard) OV->HideKeyboard();
     g_shown = 0;
@@ -169,6 +193,7 @@ static void on_custom_event(const char* evt, const char* data) {
     int n;
     EVROverlayError oe;
     if (evt == NULL || data == NULL || strcmp(evt, "sfkbd") != 0) return;
+    vr_stale();                                                    /* v4: before any command touches the interfaces */
     n = sscanf(data, "%15s %u %95[^\n]", cmd, &maxc, title);
     if (n < 1) return;
     if (!strcmp(cmd, "hide")) { hide_kb(); return; }
@@ -212,7 +237,7 @@ static void on_custom_event(const char* evt, const char* data) {
         return;
     }
     place_keyboard();
-    g_shown = 1; g_typed = 0;
+    g_shown = 1; g_typed = 0; g_nofocus = 0;
     tell("shown");
 }
 
@@ -220,6 +245,7 @@ static void on_pre_tick(UEVR_UGameEngineHandle engine, float delta) {
     struct VREvent_t ev;
     char b[48];
     (void)engine; (void)delta;
+    if (vr_stale()) return;                                        /* v4 */
     if (g_ready != 1 || g_ov == 0) return;
     if (g_faded && COMP != NULL && GetTickCount() - g_fade_t > 25000) {      /* never leave you in the dark */
         COMP->FadeToColor(0.5f, 0.0f, 0.0f, 0.0f, 0.0f, 0);
@@ -239,7 +265,7 @@ static void on_pre_tick(UEVR_UGameEngineHandle engine, float delta) {
             char c[9];
             int k, nw;
             memcpy(c, ev.data.keyboard.cNewInput, 8); c[8] = 0;
-            if (!game_in_front()) continue;
+            if (!game_in_front()) { if (!g_nofocus) { g_nofocus = 1; tell("nofocus"); } continue; }
             nw = MultiByteToWideChar(CP_UTF8, 0, c, -1, w, 8);
             for (k = 0; k < nw - 1; k++) { type_char(w[k]); g_typed++; }
         } else if (ev.eventType == EVREventType_VREvent_KeyboardDone) {
@@ -264,7 +290,7 @@ __declspec(dllexport) bool uevr_plugin_initialize(const UEVR_PluginInitializePar
     if (param->callbacks != NULL && param->callbacks->on_custom_event != NULL) param->callbacks->on_custom_event(on_custom_event);
     if (param->sdk != NULL && param->sdk->callbacks != NULL && param->sdk->callbacks->on_pre_engine_tick != NULL)
         param->sdk->callbacks->on_pre_engine_tick(on_pre_tick);
-    logi("[sf_kbd] loaded (v2) - SteamVR keyboard for terminals and text boxes + whole-view fades for level transitions%s", "");
+    logi("[sf_kbd] loaded (v4) - SteamVR keyboard for terminals and text boxes + whole-view fades for level transitions%s", "");
     return true;
 }
 
