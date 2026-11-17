@@ -28,7 +28,8 @@
 --            ring and pointer dot on their own panel where the hand points). Hidden while a level loads.
 --   Menus    Every menu is a world-locked panel in front of you; the right controller is the mouse. RetainerBox effect
 --            layers (empty through UEVR) are switched off so the UI draws.
---   Levels   Nothing touches the world while a level loads (lvl.*); view fades to black for the transition.
+--   Levels   Nothing touches the world while a level loads (lvl.*); view fades to black for the transition, and
+--            while it is black for the game's own loading / fade screens the world is not drawn (V62.load_light).
 --   Controls Steam Frame layout handled here (bumpers, View, D-pad, grips): see the panel's "Controls" section.
 --   Parked   Binoculars (three approaches, none good - binocular_mode 0).
 --
@@ -46,8 +47,8 @@
 --   uevr.api:method(...)            vr.<fn>(...) for all VR functions EXCEPT vr:get_mod_value(name)
 --   UEVR_UObjectHook.<fn>(...)      object:Method(...) for game objects      fs. / imgui. with a dot
 
-local SF_VERSION = "6.6.55"          -- the build number: say it in a bug report
-local SF_RELEASE = "1.0.1"           -- the published version
+local SF_VERSION = "6.6.64"          -- the build number: say it in a bug report
+local SF_RELEASE = "1.0.2"           -- the published version
 
 local function sf_main_body()
 
@@ -64,7 +65,12 @@ local function LOG(s)
     if s == lastmsg then repeats = repeats + 1; return end
     if repeats > 0 then loglines[#loglines + 1] = string.format("[%7.1f]   (previous line repeated %d more times)", T, repeats) end
     lastmsg, repeats = s, 0
-    if #loglines > 4000 then return end
+    if #loglines >= 6000 then                                    -- v6.6.57: keep the first 300 lines and the newest ones
+        local n, head, cut = #loglines, 300, 1500
+        table.move(loglines, head + cut + 1, n, head + 2)
+        for i = n - cut + 2, n do loglines[i] = nil end
+        loglines[head + 1] = string.format("[%7.1f]   (... %d older lines left out here to keep the log short ...)", T, cut)
+    end
     loglines[#loglines + 1] = string.format("[%7.1f] %s", T, s)
     logdirty = true
 end
@@ -164,6 +170,13 @@ local S = {
     gun_autofit = true,          -- guns whose barrel sits below / beside your hand are moved into the hand (once per gun)
     binoculars_2d = true,        -- raised binoculars = the game's own binocular view, flat in front of your eyes
     transition_fade = true,      -- level transitions: SteamVR fades to black instead of the loading box
+    load_light = true,           -- v6.6.56: while that fade is black for a load, the world is not drawn (the card only has the load)
+    load_light_warm = 0.6,       -- v6.6.56: after drawing comes back, the view stays black at least this long (s)
+    load_light_max = 45,         -- v6.6.56: safety - drawing comes back after this long whatever happens (s)
+    mark_gesture = true,         -- v6.6.57: both hands on top of your head for a second = "MARK" in the log + double buzz
+    bug_report_file = true,      -- v6.6.57: data\sf_report.txt rewritten every minute (for players' bug reports)
+    pc_right_eye = false,        -- v6.6.61: the PC window (and recordings of it) shows the right eye (sf_eye.dll - development only, not published)
+    timeline = false,            -- v6.6.59: what you do (poses, buttons, menus, item, level) -> data\sf_timeline.csv via sf_perf.dll (development build of it only)
     -- v6.6.15
     binocular_mode = 0,          -- 0 = off: binoculars as the game has them (parked) | 1 = the game's scope on them (v6.6.25) | 2 = the game's flat view (v6.6.14)
     bino_scope_class = "",       -- v6.6.25: the game's scope class borrowed for the binoculars (learned from a scoped gun)
@@ -256,6 +269,7 @@ local function load_settings()
         end
     end
 end
+do local d = {}; for k, v in pairs(S) do if type(v) ~= "table" then d[k] = v end end; SF_S_DEFAULTS = d end   -- v6.6.57
 load_settings()
 
 ---------------------------------------------------------------------------
@@ -275,7 +289,6 @@ local KSYS = nil   -- KismetSystemLibrary default object (set in lookups)
 local function alive(o)
     if o == nil or safe(function() return UEVR_UObjectHook.exists(o) end) ~= true then return false end
     if KSYS ~= nil then
-        if T < trace_until then TRACE("IsValid " .. (safe(function() return o:get_full_name() end) or "?")) end
         return safe(function() return KSYS:IsValid(o) end) == true
     end
     return true
@@ -292,11 +305,18 @@ local function getmod(name) return tostring(safe(function() return vr:get_mod_va
 local function setmod(name, value) pcall(vr.set_mod_value, name, tostring(value)) end
 
 local errors, paused = {}, {}
-local last_feature = "startup"    -- v4.21 hitch detector: which feature was running when a stall happened
+-- v6.6.62 hitch detector: the slowest guarded part since the last engine tick (the old "last feature" was always "pad",
+-- the last one to run). Globals on purpose - the main chunk has no local slots left.
+SF_CLK = os and os.clock
+SF_SLOW = { t = 0, tag = "-", s0 = 0 }
 local function guarded(tag, f, ...)
     if paused[tag] then return end
-    last_feature = tag
+    local c0 = SF_CLK and SF_CLK()
     local ok, err = pcall(f, ...)
+    if c0 then
+        local d = SF_CLK() - c0
+        if d > SF_SLOW.t then SF_SLOW.t, SF_SLOW.tag = d, tag end
+    end
     if not ok then
         errors[tag] = (errors[tag] or 0) + 1
         LOG("ERROR in " .. tag .. ": " .. tostring(err))
@@ -765,7 +785,6 @@ local function place_hands(view_index, w2m, pos, rot)
             local p, yw, rl = axes_rot(f, r, u)
             hand_vec.X, hand_vec.Y, hand_vec.Z = wx, wy, wz
             hand_rot.Pitch, hand_rot.Yaw, hand_rot.Roll = p, yw, rl
-            if T < trace_until then TRACE("view: K2_SetWorldLocationAndRotation " .. (d.label or "?")) end
             if d.comp.K2_SetWorldLocationAndRotation ~= nil then   -- a component being torn down (level change) has no methods
                 d.comp:K2_SetWorldLocationAndRotation(hand_vec, hand_rot, false, hand_hit, true)
             end
@@ -918,7 +937,7 @@ local function fix_ui_effects()
             -- v4.17: flip the property (no engine call); the engine call only for a box that is already drawing
             local was = safe(function() return rb.bRetainRender end)
             pcall(function() rb.bRetainRender = false end)
-            TRACE("SetRetainRendering " .. fullname(rb))
+            TRACE("SetRetainRendering")
             local ok = pcall(function() rb:SetRetainRendering(false) end)
             TRACE("idle")
             if ok then newly = newly + 1; fixed_count = fixed_count + 1 else LOG("could not switch off effect on " .. fullname(rb)) end
@@ -2727,6 +2746,14 @@ V62.TEXT_CLASSES = { "Class /Script/UMG.EditableTextBox", "Class /Script/UMG.Edi
                      "Class /Script/UMG.MultiLineEditableTextBox", "Class /Script/UMG.MultiLineEditableText" }
 function V62.kbd_lookup()
     V62.kbd_cls = V62.kbd_cls or {}
+    for n, c in pairs(V62.kbd_cls) do                          -- v6.6.62: a cached class that no longer exists (level change)
+        if not obj_ok(c) then
+            V62.kbd_cls[n] = nil
+            V62.kbd_cls_done = false
+            V62.kcn = (V62.kcn or 0) + 1
+            if V62.kcn <= 5 then LOG("keyboard: the terminal screen's class is gone (level change) - looking it up again") end
+        end
+    end
     if not V62.kbd_cls_done then
         local wb = V62.wbgc or api:find_uobject("Class /Script/UMG.WidgetBlueprintGeneratedClass")
         local all = wb and safe(function() return UEVR_UObjectHook.get_objects_by_class(wb, false) end)
@@ -2744,6 +2771,16 @@ function V62.kbd_lookup()
     end
 end
 function V62.kbd_scan()                      -- returns: terminal name or nil, focused text box (object) or nil
+    -- v6.6.60: the terminal the game just showed (seen by the screen watch) counts while the menu it opened stays open
+    local kt = V62.kbd_term
+    if kt ~= nil and kt.t >= (V62.kbd_t0 or 0) - 1.5 and alive(kt.w) then
+        V62.ktn = (V62.ktn or 0) + 1
+        if V62.ktn == 1 then
+            local iv = safe(function() return kt.w:IsInViewport() end)
+            LOG("keyboard: terminal open (" .. kt.n .. ", seen when the game showed it; the old check IsInViewport says " .. tostring(iv) .. ")")
+        end
+        return kt.n, nil
+    end
     for n, c in pairs(V62.kbd_cls or {}) do
         local all = safe(function() return UEVR_UObjectHook.get_objects_by_class(c, false) end)
         if type(all) == "table" then
@@ -2770,22 +2807,36 @@ function V62.kbd_open(why)
     V62.kbd_send(string.format("place %d %.0f %.0f %.0f", S.kbd_place and 1 or 0, S.kbd_fwd or 45, S.kbd_down or 55, S.kbd_tilt or 50))   -- v6.6.20
     V62.kbd_send("show 256 Silverfish")
     V62.kbn = (V62.kbn or 0) + 1
-    if V62.kbn <= 20 then LOG("keyboard: SteamVR keyboard asked for (" .. why .. ")") end
+    if V62.kbn <= 60 then LOG("keyboard: SteamVR keyboard asked for (" .. why .. ")") end
 end
 function V62.kbd_update(delta, lclick)
     if not S.kbd_auto then return end
     if not V62.kbd_in_menu then                                  -- a menu just opened
         V62.kbd_in_menu, V62.kbd_t0, V62.kbd_dismissed, V62.kbd_skip, V62.kbd_t = true, T, false, nil, 0
         V62.kbd_manual, V62.kbd_seen, V62.kbd_want = false, false, false
+        V62.kbd_bsdone, V62.kbd_bs = false, nil                  -- v6.6.63: one Backspace per terminal opening
         pcall(V62.kbd_lookup)
     end
     if V62.kbd_wait ~= nil and T > V62.kbd_wait then             -- no answer: plugin missing / not working
         V62.kbd_wait, V62.kbd_shown, V62.kbd_dismissed, V62.kbd_manual = nil, false, true, false
         if not V62.kbd_nolog then V62.kbd_nolog = true; LOG("keyboard: no answer from sf_kbd.dll (not installed yet, or it failed - see UEVR log)") end
     end
-    if lclick and not V62.kbd_shown and (V62.kbd_dismissed or V62.kbd_seen) then   -- left stick click: by hand
+    if V62.kbd_bs ~= nil and T >= V62.kbd_bs then                -- v6.6.63: see "shown" in kbd_events
+        V62.kbd_bs = nil
+        if V62.kbd_shown then
+            V62.key("tap", 0x08)
+            V62.kbs = (V62.kbs or 0) + 1
+            if V62.kbs <= 10 then LOG("keyboard: one Backspace sent (clears a stray character at the start of the terminal's line)") end
+        end
+    end
+    local dbl = false                                            -- v6.6.62: two clicks within 0.45 s
+    if lclick then dbl = T - (V62.kbd_lc or -9) < 0.45; V62.kbd_lc = dbl and -9 or T end
+    -- left stick click: by hand. One click where a keyboard belongs (it was up, or a text box / terminal was seen);
+    -- a double click in ANY menu (one click alone is also the shift-click modifier, so it must not pop a keyboard
+    -- in the inventory) - the way out when the mod does not recognise a screen.
+    if lclick and not V62.kbd_shown and (V62.kbd_dismissed or V62.kbd_seen or dbl) then
         V62.kbd_manual, V62.kbd_dismissed, V62.kbd_want = true, false, true
-        V62.kbd_open("left stick click")
+        V62.kbd_open(dbl and "left stick double click" or "left stick click")
         return
     end
     V62.kbd_t = (V62.kbd_t or 0) - delta
@@ -2804,6 +2855,7 @@ function V62.kbd_update(delta, lclick)
         V62.kbd_open(why)
     elseif why == nil and V62.kbd_shown and not V62.kbd_manual then
         V62.kbd_shown = false
+        V62.kbd_hid = T                                          -- v6.6.62: SteamVR answers our hide with "closed"
         V62.kbd_send("hide")
     end
 end
@@ -2812,12 +2864,28 @@ function V62.kbd_events()
     if q == nil or #q == 0 then return end
     V62.kbd_q = {}
     for _, d in ipairs(q) do
-        if d == "shown" then V62.kbd_wait = nil
-        elseif d:sub(1, 4) == "done" then V62.kbd_shown, V62.kbd_manual, V62.kbd_next = false, false, T + 0.5   -- back while still wanted
-        elseif d:sub(1, 6) == "closed" then V62.kbd_shown, V62.kbd_manual, V62.kbd_dismissed = false, false, true
+        if d == "shown" then
+            V62.kbd_wait = nil
+            -- v6.6.63: the first keyboard of a terminal: one Backspace 0.3 s later (a stray character sat at the start
+            -- of the line and broke the first command, 16 Nov). Never for a keyboard brought back by hand or a text box.
+            if not V62.kbd_bsdone and V62.KBD_WIDGETS[V62.kbd_why or ""] and S.kbd_clear ~= false then
+                V62.kbd_bs, V62.kbd_bsdone = T + 0.3, true
+            end
+        elseif d:sub(1, 4) == "done" then
+            -- v6.6.63: Done = finished, in a terminal too (6.6.62 brought it straight back and it could not be put away).
+            -- It stays away until a left stick click brings it back.
+            V62.kbd_shown, V62.kbd_manual, V62.kbd_dismissed = false, false, true
+            V62.kbd_done = T
+        elseif d:sub(1, 6) == "closed" then
+            -- SteamVR sends "closed" right after "done" (handled above) and after our own "hide" (not you putting it
+            -- away). Only a "closed" on its own (you clicked away from it) keeps it away.
+            V62.kbd_shown, V62.kbd_manual = false, false
+            if T - (V62.kbd_done or -9) <= 0.5 then
+                V62.kbd_dismissed = true
+            elseif T - (V62.kbd_hid or -9) > 0.5 then V62.kbd_dismissed = true end
         elseif d:sub(1, 3) == "err" then V62.kbd_shown, V62.kbd_manual, V62.kbd_dismissed, V62.kbd_wait = false, false, true, nil end
         V62.kbe = (V62.kbe or 0) + 1
-        if V62.kbe <= 30 or d:sub(1, 3) == "err" then LOG("keyboard: " .. d) end
+        if V62.kbe <= 120 or d:sub(1, 3) == "err" then LOG("keyboard: " .. d) end
     end
 end
 -- v6.6.14: THROWS. The game throws along its aim at ThrowVelocity (1000). While the trigger is held with something
@@ -3387,16 +3455,24 @@ function V62.fade(on, why)
 end
 function V62.fade_update(delta)
     if not S.transition_fade then return end
+    V62.fu_t = T                                                 -- v6.6.56: the fade is being updated (V62.load_light)
+    V62.fu_f = V62.fno                                           -- v6.6.58: ... and in which frame
     -- v6.6.18: black until your hands have been yours for a moment (the tester: ~1/4 s without hands after the fade-in);
     -- with no player body at all (main menu) only the loading screen holds it
     local hold = lvl.loading or (V62.lv_pawn ~= nil and (not lvl.free or not lvl.ready
         or (lvl.ready_t ~= nil and T - lvl.ready_t < (S.fade_hands_wait or 0.5))))
+    local gblack = lvl.loading == true                           -- v6.6.56: the game's own black screens only
     for k, w in pairs(V62.blk) do
         if alive(w) and safe(function() return w:IsInViewport() end) == true then
-            hold = true
+            hold, gblack = true, true
             if S.hide_loading_box then pcall(function() w:SetRenderOpacity(0.0) end) end
         else V62.blk[k] = nil end
     end
+    V62.game_black = gblack
+    -- v6.6.56: black while the world is not drawn, and a moment after it is drawn again (its first frames unseen)
+    local wl = V62.wl
+    if wl ~= nil and ((wl.off and T - (wl.t0 or T) < (S.load_light_max or 45))
+        or (wl.back_t ~= nil and T - wl.back_t < (S.load_light_warm or 0.6))) then hold = true end
     if S.camera_away_fade ~= false and lvl.free and view.ok == false and V62.view_away_t ~= nil and T - V62.view_away_t > 0.05 then
         -- v6.6.16: only for sleeping (the sleep screen was up in the last 30 s, or the camera is on a bed / sleep thing)
         local vt = safe(function() return api:get_player_controller(0):GetViewTarget() end)
@@ -3419,6 +3495,104 @@ function V62.fade_update(delta)
         if T - V62.fade_clear > 0.4 then V62.fade(false) end
     end
     if V62.faded and not lvl.loading and T - (V62.fade_t0 or T) > 60 then V62.fade(false) end   -- safety
+end
+-- v6.6.56: LIGHTER LEVEL LOADS. While the view is faded to black because the game shows its own black screens (its
+-- loading screen, or its fade-to-black screen before a load), the game stops drawing the 3D world
+-- (GameplayStatics.SetEnableWorldRendering - the engine's own switch for loading screens); menus and the loading
+-- screen still draw. The graphics card then only has the load to do. Why: on a card near its limit, a load's burst of
+-- work on top of a fully drawn VR frame ran past Windows' 2-second graphics timeout twice (2026-11-11 / 11-12; SteamVR
+-- could only send a frame every 89 ms, its encoder waited 2.7 s, then Windows reset the driver and the game closed).
+-- Drawing comes back 0.25 s after the game's black screens are gone, and the view stays black at least
+-- load_light_warm s longer (fade_update), so the first frames of the new place are drawn before you see them.
+-- Safety: drawing comes back the moment the view is not black, when the fade stops being updated, after
+-- load_light_max s (then not again until the fade has ended), when switched off, after 5 errors (then it rests for the
+-- session) and when the script is reset. The switch is on the game's viewport, so it outlives a level change.
+V62.wl = { off = false, n = 0, err = 0 }
+function V62.world_ctx()                                       -- any object of the current world
+    local e = V62.engine
+    local gv = e ~= nil and safe(function() return e.GameViewport end) or nil
+    if gv ~= nil and obj_ok(gv) then return gv end
+    local pc = api:get_player_controller(0)
+    if pc ~= nil and obj_ok(pc) then return pc end
+    local pawn = api:get_local_pawn(0)
+    if pawn ~= nil and obj_ok(pawn) then return pawn end
+    return nil
+end
+function V62.world_drawing(on)                                 -- -> done (the switch is in that state), asked back
+    if G.GPS == nil then return false, false end
+    local ctx = V62.world_ctx()
+    if ctx == nil then return false, false end
+    if not pcall(function() G.GPS:SetEnableWorldRendering(ctx, on) end) then return false, false end
+    local now = safe(function() return G.GPS:GetEnableWorldRendering(ctx) end)
+    if type(now) == "boolean" then return now == on, true end
+    return true, false                                          -- set; the engine could not be asked back
+end
+function V62.load_light_step(delta)
+    local wl = V62.wl
+    -- v6.6.58: "fresh" also when the fade was updated in the last few FRAMES - one frozen frame of over 1 s (the game
+    -- loading) used to look like "the fade is not being updated" and switched world drawing back on in mid-load
+    local fresh = V62.fu_t ~= nil and (T - V62.fu_t < 1.0 or (V62.fno or 0) - (V62.fu_f or -100) <= 3)
+    local black = fresh and V62.game_black == true
+    if black then wl.clear_t = nil else wl.clear_t = wl.clear_t or T end
+    if not V62.faded then wl.rest = nil end                     -- a safety stop lasts until the fade has ended
+    if wl.off then
+        wl.frames = wl.frames + 1
+        if delta > wl.worst then wl.worst = delta end
+        local why = nil
+        if S.load_light ~= true then why = "switched off"
+        elseif not S.transition_fade or not V62.faded then why = "the view is not black any more"
+        elseif not fresh then why = "safety: the fade is not being updated"
+        elseif T - wl.t0 > (S.load_light_max or 45) then why = "safety: " .. tostring(S.load_light_max or 45) .. " s"; wl.rest = true
+        elseif wl.clear_t ~= nil and T - wl.clear_t >= 0.25 then why = "the game's black screens are gone"
+        end
+        if why == nil then return end
+        local ok, asked = V62.world_drawing(true)
+        if not ok then
+            if not wl.fail_logged then wl.fail_logged = true; LOG("loading: could not switch world drawing back on yet (" .. why .. ") - trying every frame") end
+            return
+        end
+        wl.off, wl.back_t, wl.fail_logged, wl.mon = false, T, nil, { t = T, worst = 0 }
+        if wl.n <= 20 then
+            LOG(string.format("loading: world drawing back on after %.1f s (%s) - %d frames meanwhile, worst %d ms%s",
+                T - wl.t0, why, wl.frames, math.floor(wl.worst * 1000), asked and "" or " (engine not asked back)"))
+        end
+        return
+    end
+    local m = wl.mon                                            -- the first 2 s of drawing the new place (mostly still black)
+    if m ~= nil then
+        if delta > m.worst then m.worst = delta end
+        if T - m.t > 2.0 then
+            wl.mon = nil
+            if wl.n <= 20 then LOG(string.format("loading: first 2 s of drawing again - worst frame %d ms", math.floor(m.worst * 1000))) end
+        end
+    end
+    if wl.dead or wl.rest or S.load_light ~= true or not S.transition_fade or not V62.faded or not black then return end
+    if T - (V62.fade_t0 or T) < 0.25 then return end            -- the fade needs 0.15 s to be fully black
+    if wl.back_t ~= nil and T - wl.back_t < 1.0 then return end -- no flapping
+    if wl.retry_t ~= nil and T < wl.retry_t then return end
+    local ok, asked = V62.world_drawing(false)
+    if not ok then
+        wl.retry_t = T + 2.0
+        wl.nofail = (wl.nofail or 0) + 1
+        if wl.nofail <= 3 then LOG("loading: could not pause world drawing (" .. (G.GPS == nil and "no GameplayStatics" or "the call did not take") .. ") - the world stays drawn") end
+        pcall(V62.world_drawing, true)                          -- in case it took half-way
+        return
+    end
+    wl.off, wl.t0, wl.frames, wl.worst, wl.mon = true, T, 0, 0, nil
+    wl.n = wl.n + 1
+    if wl.n <= 20 then LOG(string.format("loading: world not drawn while the view is black (load %d%s)", wl.n, asked and "" or ", engine not asked back")) end
+end
+function V62.load_light_tick(delta)                            -- every game tick; never paused by errors
+    local ok, e = pcall(V62.load_light_step, delta)
+    if ok then return end
+    local wl = V62.wl
+    wl.err = wl.err + 1
+    if wl.err <= 5 then LOG("ERROR in loadlight: " .. tostring(e)) end
+    if wl.err >= 5 and not wl.dead then wl.dead = true; LOG("loading: lighter loads rest for this session after 5 errors") end
+    if wl.off then
+        local st, done = pcall(V62.world_drawing, true)
+        if st and done then wl.off, wl.back_t = false, T end
+    end
 end
 -- v6.6.43: THE HUD ON THE LOADING SCREEN. The game adds a fresh HUD to the screen at the start of every level load; the
 -- flat game covers it with the loading screen's black box, which the mod makes see-through (the view is faded to black
@@ -3846,6 +4020,8 @@ function V62.on_widget_added(f, obj, locals, result)
         V62.wsn = (V62.wsn or 0) + 1
         if V62.wsn <= 60 then LOG("screen added by the game: " .. cn) end
     end
+    if V62.tl_screen ~= nil then pcall(V62.tl_screen, cn) end   -- v6.6.59
+    if V62.KBD_WIDGETS[cn] then V62.kbd_term = { w = obj, n = cn, t = T } end   -- v6.6.60: a terminal was just shown
     if cn == "SleepScreen_C" then V62.sleep_t = T end          -- v6.6.16: sleeping (the camera-away fade is for this)
     if cn == "HUD_Widget_C" then pcall(V62.hud_hide, obj) end   -- v6.6.43: not on the loading screen
     if cn == "BarterScreen_C" then V62.bq = { w = obj, cn = cn, t = T + 1.5 } end   -- v6.6.45 / v6.6.48: looked at from the tick (V62.barter_watch)
@@ -4240,7 +4416,9 @@ local function update_frame_controls(pawn, delta)
     guarded("keyboard", V62.kbd_events)                       -- v6.6.13
     if not menu_mode and V62.kbd_in_menu then                    -- menu closed: keyboard away
         V62.kbd_in_menu = false
-        if V62.kbd_shown then V62.kbd_shown = false; pcall(function() api:dispatch_custom_event("sfkbd", "hide") end) end
+        if V62.kbd_shown then V62.kbd_shown = false; V62.kbd_hid = T; pcall(function() api:dispatch_custom_event("sfkbd", "hide") end) end
+        -- v6.6.62 (6b): the terminal of that menu is over (kept if it was shown in the last 0.5 s: one that follows a menu directly)
+        if V62.kbd_term ~= nil and T - V62.kbd_term.t > 0.5 then V62.kbd_term = nil end
     end
     if menu_mode then
         local le = fc.edge("lclick", 0)
@@ -4449,6 +4627,7 @@ local function on_pad(retval, user_index, state)
     local l3 = ((g.wButtons or 0) & 0x0040) ~= 0                  -- v6.4: L3 bit as UEVR hands it to the game
     if l3 ~= pad.l3 then pad.l3 = l3; pad.l3n = (pad.l3n or 0) + 1; if pad.l3n <= 8 then LOG("pad: left stick click " .. (l3 and "down" or "up") .. " (as the game sees it)") end end
     pad.age = 0
+    if V62.tl_pad ~= nil then pcall(V62.tl_pad, g) end          -- v6.6.59: buttons into the timeline
     if not pad.seen then pad.seen = true; LOG("the game is reading the controller") end
     track.pad_seen = true
     if pad.lost then pad.lost = false; LOG("controller input reaching the game again") end
@@ -5867,6 +6046,8 @@ local function draw_panel()
         if changed then S.hide_loading_box = val; save_settings() end
         changed, val = imgui.checkbox("Level transitions: fade to black (needs sf_kbd.dll v2)", S.transition_fade)
         if changed then S.transition_fade = val; save_settings() end
+        changed, val = imgui.checkbox("Level loads: the world is not drawn while the view is black (lighter loads)", S.load_light == true)
+        if changed then S.load_light = val; save_settings() end
         changed, val = imgui.checkbox("Sleeping: fade to black while the game moves the camera to the bed", S.camera_away_fade)
         if changed then S.camera_away_fade = val; save_settings() end
         changed, val = imgui.checkbox("Audio: the game hears from your head - sounds follow the headset, not the gun", S.audio_head ~= false)
@@ -6036,6 +6217,7 @@ function V62.panel()
             V62.say("        " .. pr.what, "        ")
         end
         V62.say("These sit on top of the game's own graphics settings, which stay as you set them.")
+        V62.row("Lighter level loads", "load_light", nil, "While the view is black for a level load, the world is not drawn, so the graphics card only has the load to do. Turn it off if a level ever stays black.")
     end
     if V62.section("Controls (Steam Frame)") then
         V62.row("Left-handed: gun and both pointers in your LEFT hand", "left_handed", function() V62.hand_sync(true) end,
@@ -6108,7 +6290,7 @@ function V62.panel()
         V62.num("Menu size", "menu_size", 0.5, 3.0)
         V62.num("Menu height (metres; minus = lower)", "menu_height", -1.0, 1.0)
         V62.num("Menu pointer tilt (degrees)", "pointer_pitch", -60, 60)
-        V62.row("On-screen keyboard for terminals and text boxes", "kbd_auto")
+        V62.row("On-screen keyboard for terminals and text boxes", "kbd_auto", nil, "Put it away with Done. Need it again? Click the left stick (in a terminal) or double-click it (in any other menu).")
         V62.row("Keyboard in front of you at chest height", "kbd_place", nil, "Off = where SteamVR puts it.")
         local function kbd() V62.kbd_send(string.format("place %d %.0f %.0f %.0f", S.kbd_place and 1 or 0, S.kbd_fwd or 61, S.kbd_down or 75, S.kbd_tilt or 50)) end
         V62.num("Keyboard: how far below your eyes (cm)", "kbd_down", 20, 90, kbd)
@@ -6130,7 +6312,15 @@ function V62.panel()
         V62.say("Not working in VR yet: the binoculars, and the photo camera's viewfinder (photos themselves work).")
         V62.say("Crouch-jump lower than you expect? The game lets you jump less high when you are hungry.")
         V62.say("Settings file: data\\sf_settings.txt in this game's UEVR profile folder. Delete it to get every default back.")
-        V62.say("Reporting a bug: send data\\sf_main_log.txt and UEVR's log.txt from that folder. Both are written fresh at every start, so copy them before you start the game again.")
+        V62.say("Something felt wrong (a stutter, a glitch, a sound)? Put both hands on top of your head for a second. A double buzz means the log has marked that exact moment - then say roughly what happened.")
+        V62.row("Mark a moment: both hands on your head", "mark_gesture", nil, nil)
+        if S.dev_tools == true then                                   -- v6.6.64: development switches (1.0.2 does not ship their plugins' parts)
+            V62.row("Record what I do (timeline file for bug hunting)", "timeline", nil, nil)   -- v6.6.59
+            V62.row("PC window shows the right eye (for recordings)", "pc_right_eye", nil, nil)   -- v6.6.61
+        end
+        V62.say("Reporting a bug: attach data\\sf_report.txt from that folder to an issue on the mod's GitHub page. It is rewritten every minute while you play, so copy it before you start the game again. It has no personal details. The full logs are data\\sf_main_log.txt and UEVR's log.txt.")
+        if imgui.button("Write the bug report file now###sf_report") then pcall(V62.write_report, "written with the button"); V62.rep_said = T end
+        if V62.rep_said ~= nil and T - V62.rep_said < 6 then V62.say("Written: data\\sf_report.txt") end
     end
     if S.dev_tools == true and V62.section("Development: every switch") then draw_panel() end
 end
@@ -6156,17 +6346,135 @@ uevr.sdk.callbacks.on_draw_ui(function()
     end
     guarded("panel", V62.panel)
 end)
+-- v6.6.57: the computer's clock in the log ("clock 10:44:00" once a minute, and on HITCH / MARK lines), so the mod's log
+-- lines up with SteamVR's, UEVR's, sf_perf's data\sf_gpu_log.txt and the session recorder's without guesswork.
+function V62.clock()
+    local ok, c = pcall(os.date, "%H:%M:%S")
+    if ok and type(c) == "string" then return c end
+    return nil
+end
+function V62.at() local c = V62.clock(); return c and (" at " .. c) or "" end
+-- v6.6.57: MARK A MOMENT - both hands on top of your head for a second: a "MARK" line in the log with the time, and a
+-- double buzz. Something felt wrong (a stutter, a glitch, a sound)? Mark it, say roughly what, and the logs show that second.
+V62.mk = { held = 0, last = -100, n = 0 }
+function V62.mark_tick(delta)
+    if S.mark_gesture == false then return end
+    local m = V62.mk
+    if m.hp == nil then
+        m.hp, m.hq = Vector3f.new(0, 0, 0), Quaternionf.new(0, 0, 0, 1)
+        m.lp, m.lq = Vector3f.new(0, 0, 0), Quaternionf.new(0, 0, 0, 1)
+        m.rp, m.rq = Vector3f.new(0, 0, 0), Quaternionf.new(0, 0, 0, 1)
+    end
+    if m.buzz2 ~= nil and T >= m.buzz2 then m.buzz2 = nil; haptic(0, 0.06, 0.8); haptic(1, 0.06, 0.8) end
+    vr.get_pose(vr.get_hmd_index(), m.hp, m.hq)
+    vr.get_pose(vr.get_left_controller_index(), m.lp, m.lq)
+    vr.get_pose(vr.get_right_controller_index(), m.rp, m.rq)
+    local function on_head(p)                                  -- above the eyes, not more than ~20 cm to any side
+        local dx, dy, dz = X(p) - X(m.hp), Y(p) - Y(m.hp), Z(p) - Z(m.hp)
+        return dy > 0.04 and dy < 0.40 and (dx * dx + dz * dz) < 0.04
+    end
+    if on_head(m.lp) and on_head(m.rp) then m.held = m.held + (delta or 0) else m.held = 0 end
+    if m.held >= 1.0 and T - m.last > 5 then
+        m.last, m.held, m.n = T, 0, m.n + 1
+        LOG(string.format("MARK #%d - you marked this moment (both hands on your head)%s | menu=%s, level ready=%s",
+            m.n, V62.at(), tostring(menu_mode), tostring(lvl ~= nil and lvl.ready == true)))
+        haptic(0, 0.06, 0.8); haptic(1, 0.06, 0.8)
+        m.buzz2 = T + 0.2
+        pcall(V62.tl_send, "mark", m.n)                         -- v6.6.59
+        flushlog()
+    end
+end
+-- v6.6.59: THE TIMELINE - what you were doing, second by second, for data\sf_timeline.csv (sf_perf.dll v5.2 writes it with
+-- the computer's clock on every line). Poses 10x a second, buttons and screens when they change, a state line when the
+-- menu / screen / item / level / walking / turning changes. It only looks at values the mod already has, plus the item
+-- in your hand once a second (level ready, no menu) and the level's name every 5 s.
+V62.tl = { t = 0, pt = 0, mt = 0, st = "", map = "?", btn = -1, lt = false, rt = false, ls = nil, sn = 0, ssec = 0, item = "-" }
+function V62.tl_send(kind, data)
+    if S.timeline == false then return end
+    api:dispatch_custom_event("sftl", kind .. "," .. tostring(data))
+end
+function V62.tl_pad(g)
+    local t = V62.tl
+    local b = g.wButtons or 0
+    local lt, rt = (g.bLeftTrigger or 0) > 127, (g.bRightTrigger or 0) > 127
+    if b ~= t.btn or lt ~= t.lt or rt ~= t.rt then
+        t.btn, t.lt, t.rt = b, lt, rt
+        V62.tl_send("pad", string.format("0x%04X LT=%d RT=%d", b, lt and 1 or 0, rt and 1 or 0))
+    end
+end
+function V62.tl_screen(cn)
+    local t = V62.tl
+    if not (cn:find("Screen", 1, true) or cn:find("Widget_C", 1, true) or cn:find("Menu", 1, true)) then return end
+    local sec = math.floor(T)
+    if sec ~= t.ssec then t.ssec, t.sn = sec, 0 end
+    t.sn = t.sn + 1
+    if t.sn > 20 then return end
+    t.scr = cn
+    V62.tl_send("screen", cn)
+end
+function V62.eye_tick()                                         -- v6.6.61: tell sf_eye.dll the setting when it changes
+    local want = S.pc_right_eye ~= false
+    if want ~= V62.eye_sent then
+        V62.eye_sent = want
+        pcall(function() api:dispatch_custom_event("sfeye", want and "on" or "off") end)
+    end
+end
+function V62.tl_tick(delta)
+    if S.timeline == false then return end
+    local t = V62.tl
+    if V62.last_shot ~= nil and V62.last_shot ~= t.ls then
+        if t.ls ~= nil then V62.tl_send("fire", t.item) end
+        t.ls = V62.last_shot
+    end
+    if T - t.pt >= 0.1 then
+        t.pt = T
+        if t.hp == nil then
+            t.hp, t.hq = Vector3f.new(0, 0, 0), Quaternionf.new(0, 0, 0, 1)
+            t.lp, t.lq = Vector3f.new(0, 0, 0), Quaternionf.new(0, 0, 0, 1)
+            t.rp, t.rq = Vector3f.new(0, 0, 0), Quaternionf.new(0, 0, 0, 1)
+        end
+        vr.get_pose(vr.get_hmd_index(), t.hp, t.hq)
+        vr.get_pose(vr.get_left_controller_index(), t.lp, t.lq)
+        vr.get_pose(vr.get_right_controller_index(), t.rp, t.rq)
+        local q = t.hq
+        V62.tl_send("pose", string.format("%.3f %.3f %.3f %.3f %.3f %.3f %.3f|%.3f %.3f %.3f|%.3f %.3f %.3f",
+            X(t.hp), Y(t.hp), Z(t.hp), q.x or 0, q.y or 0, q.z or 0, q.w or 1, X(t.lp), Y(t.lp), Z(t.lp), X(t.rp), Y(t.rp), Z(t.rp)))
+    end
+    if T - t.t < 0.25 then return end
+    t.t = T
+    local ready = lvl ~= nil and lvl.ready == true and not lvl.loading
+    if ready and not menu_mode and T - t.mt >= 1.0 then         -- the item in your hand, once a second
+        t.mt = T
+        local pawn = safe(function() return api:get_local_pawn(0) end)
+        if pawn ~= nil then
+            t.item = V62.held(pawn) or "-"
+            if T - (t.mapt or -10) >= 5 then
+                t.mapt = T
+                local fn = fullname(pawn)
+                t.map = fn:match("/([%w_]+)%.[%w_]+%.PersistentLevel") or t.map
+            end
+        end
+    end
+    local walk, turn = false, false
+    if pad.axl ~= nil then walk = (X(pad.axl) ^ 2 + Y(pad.axl) ^ 2) > 0.09 end
+    if pad.axr ~= nil then turn = math.abs(X(pad.axr)) > 0.3 end
+    local st = string.format("menu=%s;screen=%s;item=%s;level=%s;load=%s;walk=%s;turn=%s", tostring(menu_mode), t.scr or "-", t.item,
+        t.map, lvl == nil and "?" or (lvl.loading and "loading" or (lvl.ready and "ready" or "not ready")), tostring(walk), tostring(turn))
+    if st ~= t.st then t.st = st; V62.tl_send("state", st) end
+end
 pcall(function() uevr.sdk.callbacks.on_lua_event(function(n, d)   -- v6.6.10 / v6.6.11
     if n == "sfinv" then V62.inv_raw = d elseif n == "sfperf" then V62.perf_raw = d elseif n == "sfmat" then V62.mat_raw = d   -- v6.6.37
     elseif n == "sfhand" then V62.hand_raw = d                                                                                 -- v6.6.49
     elseif n == "sftxt" then V62.txt_raw = d                                                                                   -- v6.6.43
-    elseif n == "sfkbd" then V62.kbd_q = V62.kbd_q or {}; V62.kbd_q[#V62.kbd_q + 1] = d end   -- v6.6.13
+    elseif n == "sfkbd" then V62.kbd_q = V62.kbd_q or {}; V62.kbd_q[#V62.kbd_q + 1] = d   -- v6.6.13
+    elseif n == "sfeye" then V62.eyen = (V62.eyen or 0) + 1; if V62.eyen <= 10 then LOG("PC window (sf_eye.dll): " .. tostring(d)) end end   -- v6.6.61
 end) end)
 
 ---------------------------------------------------------------------------
 -- main loop
 ---------------------------------------------------------------------------
 LOG("Project Silverfish VR " .. SF_RELEASE .. " by Blind - sf_main build " .. SF_VERSION .. " loaded")
+if V62.clock() then LOG("clock " .. V62.clock() .. " (the computer's time; again once a minute)") end   -- v6.6.57
 local flush_acc, started, ui_t = 0, false, 0
 local ui_menu, ui_t2 = nil, nil
 -- v4.21 HITCH DETECTOR. A VR frame should be ~7-22 ms. A much longer frame is a stutter; a very long one is the
@@ -6174,21 +6482,97 @@ local ui_menu, ui_t2 = nil, nil
 -- took, so a big value here means the previous frame stalled. Logging only the spikes costs almost nothing and
 -- tells us next time exactly when frames froze and what was running - measured, not guessed.
 local hitch = { count = 0, worst = 0, logged = 0, next_summary = 30 }
+-- v6.6.57: data\sf_report.txt - a short report a player can attach to a GitHub issue. Rewritten every minute while the game
+-- runs (so it is there after a crash) and by the button on the settings page. Nothing personal: C:\Users\<name> is blanked.
+function V62.write_report(why)
+    local R = {}
+    local function add(x) R[#R + 1] = x end
+    add("Project Silverfish VR - bug report. Attach this file to an issue at https://github.com/BlindSalamander/project-silverfish-vr/issues")
+    add("and say what happened and roughly when. It is rewritten every minute while you play - copy it before you start the game again.")
+    add(string.format("Mod %s (build %s) | written%s | %d min after the mod started | %s", SF_RELEASE, SF_VERSION, V62.at(), math.floor(T / 60), why or "every minute"))
+    local pr = V62.GFX and V62.GFX[S.gfx_level or 2]
+    add("Graphics preset: " .. tostring(S.gfx_level) .. " (" .. (pr and pr.name or "?") .. ")")
+    local ch = {}
+    for k, v in pairs(S) do
+        local d = SF_S_DEFAULTS and SF_S_DEFAULTS[k]
+        if type(v) ~= "table" and d ~= nil and v ~= d then ch[#ch + 1] = k .. "=" .. tostring(v) end
+    end
+    table.sort(ch)
+    add("Settings changed from the defaults: " .. (#ch > 0 and table.concat(ch, ", ") or "none"))
+    local ne = 0
+    for _, c in pairs(errors) do ne = ne + c end
+    add(string.format("Stutters over 80 ms in play so far: %d, worst %d ms (pauses in level loads, not counted: %d) | script errors so far: %d | marked moments: %d",
+        hitch.play or 0, math.floor((hitch.play_worst or 0) * 1000), hitch.loads or 0, ne, V62.mk.n))
+    local last = {}
+    for i = #loglines, math.max(1, #loglines - 800), -1 do
+        local l = loglines[i]
+        if #last < 3 and (l:find("frame times, graphics", 1, true) or l:find("where the time goes", 1, true) or l:find("graphics card per VR frame", 1, true)) then table.insert(last, 1, l) end
+    end
+    if #last > 0 then add("Latest frame report:"); for _, l in ipairs(last) do add("  " .. l) end end
+    add("")
+    add("--- the start of the mod's log ---")
+    for i = 1, math.min(40, #loglines) do add(loglines[i]) end
+    add("")
+    add("--- the last 150 lines of the mod's log ---")
+    for i = math.max(41, #loglines - 149), #loglines do add(loglines[i]) end
+    local txt = table.concat(R, "\n"):gsub("%a:[\\/][Uu][Ss][Ee][Rr][Ss][\\/][^\\/\r\n]+", "C:\\Users\\<you>")
+    pcall(fs.write, "sf_report.txt", txt)
+end
+pcall(function() uevr.sdk.callbacks.on_script_reset(function()   -- v6.6.56: never leave the world undrawn
+    if V62.wl ~= nil and V62.wl.off then pcall(V62.world_drawing, true) end
+end) end)
 V62.reg("on_pre_engine_tick", function(engine, delta)
     T = T + delta
     V62.fno = (V62.fno or 0) + 1                                -- v6.6.45: frame number (which eye passes belong together)
+    V62.engine = engine                                         -- v6.6.56: its game viewport (V62.world_ctx)
+    V62.load_light_tick(delta)                                  -- v6.6.56: lighter level loads (safe by itself)
+    pcall(V62.mark_tick, delta)                                 -- v6.6.57: both hands on your head = MARK in the log
+    pcall(V62.tl_tick, delta)                                   -- v6.6.59: the timeline (data\sf_timeline.csv)
+    pcall(V62.eye_tick)                                         -- v6.6.61: right eye on the PC window (sf_eye.dll)
+    if T >= (V62.clock_next or 60) then                         -- v6.6.57: the computer's time once a minute + the report
+        V62.clock_next = T + 60
+        local c = V62.clock()
+        if c then LOG("clock " .. c) end
+        if S.bug_report_file ~= false then pcall(V62.write_report) end
+    end
+    -- v6.6.62: what the mod itself did in the frame that just ended (slowest guarded part, time inside all callbacks)
+    local sl_tag, sl_ms = SF_SLOW.tag, SF_SLOW.t * 1000
+    local in_ms = ((SF_SCRIPT_T or 0) - (SF_SLOW.s0 or 0)) * 1000
+    SF_SLOW.t, SF_SLOW.tag, SF_SLOW.s0 = 0, "-", SF_SCRIPT_T or 0
+    local busy = lvl == nil or lvl.ready ~= true or lvl.loading == true      -- a level is loading / not ready
+    if hitch.pend ~= nil then                                    -- v6.6.62: a stall is a "stutter" only if no load follows it
+        if busy then hitch.loads = (hitch.loads or 0) + 1; hitch.pend = nil
+        elseif T - hitch.pend.t > 2.5 then
+            hitch.play = (hitch.play or 0) + 1
+            if hitch.pend.d > (hitch.play_worst or 0) then hitch.play_worst = hitch.pend.d end
+            hitch.pend = nil
+        end
+    end
     if T > 8 and delta > 0.08 then
+        pcall(V62.tl_send, "hitch", string.format("%d ms menu=%s", math.floor(delta * 1000), tostring(menu_mode)))   -- v6.6.59
         hitch.count = hitch.count + 1
         if delta > hitch.worst then hitch.worst = delta end
+        if busy then hitch.loads = (hitch.loads or 0) + 1                    -- the game's own pause in a load
+        elseif hitch.pend == nil then hitch.pend = { t = T, d = delta }
+        else                                                                 -- a second stall while one waits: the first was in play
+            hitch.play = (hitch.play or 0) + 1
+            if hitch.pend.d > (hitch.play_worst or 0) then hitch.play_worst = hitch.pend.d end
+            hitch.pend = { t = T, d = delta }
+        end
         if hitch.logged < 60 or delta > 0.30 then
             hitch.logged = hitch.logged + 1
-            LOG(string.format("HITCH: last frame took %d ms (T=%.1f, menu=%s, last feature=%s)",
-                math.floor(delta * 1000), T, tostring(menu_mode), last_feature))
+            LOG(string.format("HITCH: last frame took %d ms (T=%.1f, menu=%s, %s; inside the mod %.1f ms, its slowest part: %s %.1f ms)%s",
+                math.floor(delta * 1000), T, tostring(menu_mode), busy and "level loading" or "in play unless a load follows",
+                in_ms, sl_tag, sl_ms, V62.at()))
         end
     end
     if T >= hitch.next_summary then
         hitch.next_summary = hitch.next_summary + 30
-        if hitch.count > 0 then LOG(string.format("hitch summary: %d stutters over %d ms threshold so far, worst %d ms", hitch.count, 80, math.floor(hitch.worst * 1000))) end
+        if hitch.count > (hitch.sum_n or 0) then                 -- v6.6.62: only when something changed (was: every 30 s)
+            hitch.sum_n = hitch.count
+            LOG(string.format("hitch summary: %d stutters in play (worst %d ms) + %d pauses in level loads so far (stalls over %d ms)",
+                hitch.play or 0, math.floor((hitch.play_worst or 0) * 1000), hitch.loads or 0, 80))
+        end
         if (ctrl_jump.all or 0) > (ctrl_jump.all_logged or 0) then           -- v6.6.14
             LOG(string.format("control yaw jumps over 20 deg in one frame: %d in the last 30 s (%d total)", ctrl_jump.all - (ctrl_jump.all_logged or 0), ctrl_jump.all))
             ctrl_jump.all_logged = ctrl_jump.all
@@ -6219,13 +6603,22 @@ V62.reg("on_pre_engine_tick", function(engine, delta)
                 local function g(k) return pf:match(k .. "=([^;]+)") or "?" end
                 LOG(string.format("   where the time goes: game engine tick %s ms/frame | CPU busy: game thread %s%%, render thread %s%%, busiest others %s%% | GPU 3D busy: this game %s%%, whole PC %s%% (others: %s) | %s fps over %s s",
                     g("tick_ms"), g("game_cpu"), g("present_cpu"), g("other_cpu"), g("gpu_game"), g("gpu_all"), g("gpu_top"), g("fps"), g("secs")))
+                local vf = tonumber(pf:match("vr_frames=([%-%d]+)"))           -- v6.6.57: sf_perf v4
+                if vf ~= nil and vf > 0 then
+                    LOG(string.format("   graphics card per VR frame (SteamVR): this game %s ms average, worst %s ms | whole frame with SteamVR worst %s ms | SteamVR's own part %s ms | late frames %s, dropped %s, longest gap between frames %s ms",
+                        g("app_gpu"), g("app_gpu_max"), g("total_gpu_max"), g("comp_gpu"), g("late"), g("dropped"), g("interval_max")))
+                    local nst = tonumber(pf:match("stalls=(%d+)"))          -- v6.6.58: sf_perf v5.1
+                    if nst ~= nil and nst > 0 then
+                        LOG(string.format("      + %d frame(s) stretched by a game freeze (SteamVR timed them at up to %s ms - that is mostly the freeze, not graphics work)", nst, g("stall_max")))
+                    end
+                elseif vf == -1 and not V62.vrft_nolog then V62.vrft_nolog = true; LOG("   (sf_perf.dll: SteamVR's frame timing is not available)") end
             elseif not V62.perf_nolog then V62.perf_nolog = true; LOG("   (no answer from sf_perf.dll)") end
             V62.ft = { p = S.gfx_level, t0 = T, n = 0, sum = 0, over = 0, worst = 0, s0 = SF_SCRIPT_T or 0, all = 0 }
         end
     end
     local mc = V62.mc
     if mc ~= nil then
-        if delta > 0.02 then mc.n = mc.n + 1; mc.feats[#mc.feats + 1] = string.format("%dms@%.1fs(%s)", math.floor(delta * 1000), T - mc.t, tostring(last_feature)) end
+        if delta > 0.02 then mc.n = mc.n + 1; mc.feats[#mc.feats + 1] = string.format("%dms@%.1fs(%s %.1fms)", math.floor(delta * 1000), T - mc.t, tostring(sl_tag), sl_ms) end
         if delta > mc.max then mc.max = delta end
         if T - mc.t > 4 then
             V62.mc = nil
