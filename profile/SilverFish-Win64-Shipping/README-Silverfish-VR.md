@@ -1,6 +1,6 @@
 # Project Silverfish VR
 
-**Version 1.0.1 (build 6.6.55) · by Blind**
+**Version 1.0.2 (build 6.6.64) · by Blind**
 
 A UEVR profile that turns [Project Silverfish](https://store.steampowered.com/app/2941710/Project_Silverfish) into a motion-controlled VR game. Your two hands are tracked, the gun sits in your hand and shoots where its barrel points, long guns can be held with both hands, your body follows your head around the room, the HUD sits inside your helmet, and every menu is a panel in front of you that you point at.
 
@@ -8,15 +8,29 @@ It is built for the **Steam Frame** and its controllers, running through **Steam
 
 Nothing in the game's own folder is changed and your saves are never touched. The mod lives entirely in UEVR's profile folder for the game.
 
+https://github.com/user-attachments/assets/7f0f3896-5331-4986-bb39-85ec00a618ea
+
 ---
 
 ## Fixes
+
+**1.0.2**
+
+- **Crashes during level loads.** The graphics card stayed fully busy drawing the world behind the black loading screen while the game loaded, and on some loads the graphics driver gave up and the game crashed. The mod now stops drawing the world while the screen is black for a load, so the card only has the load to do.
+- **A small stutter about every 40 seconds.** The mod's own performance check took its measurements on the game's thread. It now takes them in the background.
+- **The keyboard in terminals.** It comes up every time you open a terminal (after a level change it could stay away). **Done** puts it away and it stays away; one click of the left stick brings it back. A stray character that sat at the start of the first command, so the first command never worked, is cleared.
+
+New in 1.0.2:
+
+- **Keyboard in any menu:** double-click the left stick.
+- **Bug reports made easy:** the mod writes `data\sf_report.txt` every minute, and you can mark a moment by putting both hands on top of your head for a second. See [Reporting a bug](#reporting-a-bug).
+- The mod's log no longer stops after about 100 minutes, has the computer's time once a minute, and tells a stutter during play apart from the pauses inside level loads.
 
 **1.0.1**
 
 - **Scopes while you move.** On every scoped gun, the dark inside of the scope and the picture in it slid out of the tube whenever you walked, strafed or sprinted with the scope up, and sat right again when you stood still. It now stays in the scope.
 
-Coming from 1.0: import the new zip the same way. Your settings are kept.
+Coming from 1.0 or 1.0.1: import the new zip the same way. Your settings are kept.
 
 ---
 
@@ -57,7 +71,7 @@ Every weapon and tool on the game's test map was fired or used in the headset fo
 ## Install
 
 1. **Launch option.** In Steam: right-click Project Silverfish → Properties → General → Launch Options, and type `-dx11`.
-2. **Import the profile.** Download `SilverFish-Win64-Shipping.zip` from the Releases page. Start `UEVRInjector.exe`, click **Import Config** and pick the zip. Do not rename it: UEVR uses the file name as the game's folder name. (If your browser saved it as `SilverFish-Win64-Shipping (1).zip`, rename it back first.) UEVR asks whether you trust a profile that contains DLL plugins. That is expected (what each one does is listed under [What is in the package](#what-is-in-the-package)); answer Yes.
+2. **Import the profile.** Download `SilverFish-Win64-Shipping.zip` from the [latest release](https://github.com/BlindSalamander/project-silverfish-vr/releases/latest). Start `UEVRInjector.exe`, click **Import Config** and pick the zip. Do not rename it: UEVR uses the file name as the game's folder name. (If your browser saved it as `SilverFish-Win64-Shipping (1).zip`, rename it back first.) UEVR asks whether you trust a profile that contains DLL plugins. That is expected (what each one does is listed under [What is in the package](#what-is-in-the-package)); answer Yes.
 3. **Start SteamVR**, put the headset on, then **start the game** and wait for its main menu.
 4. **Inject.** In UEVRInjector pick the process `SilverFish-Win64-Shipping`, make sure the runtime is **OpenVR**, and click Inject.
 5. **Click once on the game's window** on the desktop, so Windows sends it keyboard and mouse input. The game is keyboard-and-mouse only; the mod presses its keys for you, and Windows only delivers those to the window in front.
@@ -105,6 +119,7 @@ These are the mod's own, so they are worth reading once.
 | Left grip, squeezed fully, + D-pad | **Utility slots** 5 (up), 6 (right), 7 (down), 8 (left). |
 | Left grip, squeezed fully, + View | **Next graphics preset**: High → Medium → Low → Performance → High. The controller buzzes one to four times to tell you which one you are on. |
 | Left grip (squeezed fully) or left stick click, in menus | **Shift-click.** Hold either one and click with the trigger. This is how you do anything the game does on Shift + click, such as moving a whole stack. |
+| Left stick click, in a terminal | **Keyboard back.** The keyboard comes up by itself when a terminal opens; Done puts it away, one click brings it back. A **double click** brings it up in any other menu too. |
 | Left trigger, while your left hand holds the flashlight | Switches the flashlight between its two holds: a torch (beam where the hand points) and a raised hold for a hand held up by your head. |
 | Both stick clicks, held for a second | UEVR's own menu. |
 
@@ -292,18 +307,20 @@ When the frame rate is below your headset's refresh rate, the pointer dot and cl
 
 Open an issue on this repository, or post in the mod's thread on the Flat2VR Discord. Play-test it, break it, and tell me what broke.
 
+**When something goes wrong while you play, put both hands on top of your head for a second.** A double buzz means the mod has marked that exact moment in its log, with the time. Then carry on, or say roughly what happened if you are recording.
+
 Please include:
 
-1. The **build number** from the top of the settings page (for this release: 1.0.1, build 6.6.55), and your UEVR build.
+1. **`data\sf_report.txt`** from `%APPDATA%\UnrealVRMod\SilverFish-Win64-Shipping\`. The mod rewrites it every minute while you play (or press *Write the bug report file now* on the Help page of the settings): the build, your settings that differ from the defaults, the stutters so far, the moments you marked and the end of the log. Personal paths in it are blanked.
 2. Your headset, GPU and CPU, and which **graphics preset** you were on.
 3. What happened, and roughly when in the session (minutes after starting).
-4. The two log files from `%APPDATA%\UnrealVRMod\SilverFish-Win64-Shipping\`: **`data\sf_main_log.txt`** (the mod's log) and **`log.txt`** (UEVR's log).
+4. If you can: the two full logs from the same folder, **`data\sf_main_log.txt`** (the mod's log) and **`log.txt`** (UEVR's log), and your UEVR build.
 
-Both logs are written fresh at every start, so copy them **before** you start the game again.
+All of these files are written fresh at every start, so copy them **before** you start the game again.
 
-If your report is about frame rate or about a graphics preset, the mod's log is what makes it useful: it holds a frame-time line about twice a minute with the preset in use, frames per second, how many frames missed the refresh rate, and where the time went (CPU threads, GPU). A report without it is a guess.
+If your report is about frame rate or about a graphics preset, the mod's log is what makes it useful: it holds a frame-time line about twice a minute with the preset in use, frames per second, how many frames missed the refresh rate, SteamVR's own graphics-card time per frame, and where the time went (CPU threads, GPU). A report without it is a guess.
 
-What is in those files, so you can decide what to share: the mod's log has timings, which controls and items were used, error messages, and the names of other programs that were using the graphics card at the time (for example a browser or a recorder). It has no window titles, no paths on your PC and no account names. UEVR's own log contains the full path of the profile folder, **which includes your Windows user name**. Blank that out before posting the file in public if you would rather not share it.
+What is in those files, so you can decide what to share: the mod's log and the report have timings, which controls and items were used, error messages, and the names of other programs that were using the graphics card at the time (for example a browser or a recorder). They have no window titles, no paths on your PC and no account names. UEVR's own log contains the full path of the profile folder, **which includes your Windows user name**. Blank that out before posting the file in public if you would rather not share it.
 
 ---
 
@@ -323,9 +340,9 @@ Everything is inside `%APPDATA%\UnrealVRMod\SilverFish-Win64-Shipping\`.
 | `plugins\sf_start.dll` | Runs once at start, before UEVR reads its files. It makes sure `actions.json` lists the Steam Frame layout and is read-only, and puts seven UEVR start settings back (below). |
 | `plugins\sf_kbd.dll` | Shows SteamVR's keyboard for terminals and text boxes, and does the fade to black. |
 | `plugins\sf_inv.dll`, `sf_mat.dll`, `sf_txt.dll` | Read-only helpers. UEVR's Lua cannot read some kinds of game data (lists of structs, text values); these read them for the script. |
-| `plugins\sf_perf.dll` | Measures frame times, thread load and GPU use for the log. |
+| `plugins\sf_perf.dll` | Measures frame times, thread load and GPU use for the log, and reads SteamVR's own graphics-card time per frame. |
 
-Written while you play: `data\sf_settings.txt` (your settings), `data\sf_main_log.txt` (the log), `actions.json` (made by `sf_start.dll` on the first start).
+Written while you play: `data\sf_settings.txt` (your settings), `data\sf_main_log.txt` (the log), `data\sf_report.txt` (the bug report, every minute), `data\sf_gpu_log.txt` (graphics-card time per frame, one line a second), `actions.json` (made by `sf_start.dll` on the first start).
 
 **None of this contacts the internet.** No plugin opens a network connection, and nothing is sent anywhere. The source of every plugin is in the `source` folder of this repository.
 
