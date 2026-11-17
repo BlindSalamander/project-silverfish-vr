@@ -1,6 +1,6 @@
 # Project Silverfish VR
 
-**Version 1.0.2 (build 6.6.64) · by Blind**
+**Version 1.0.2 (build 6.6.65) · by Blind**
 
 A UEVR profile that turns [Project Silverfish](https://store.steampowered.com/app/2941710/Project_Silverfish) into a motion-controlled VR game. Your two hands are tracked, the gun sits in your hand and shoots where its barrel points, long guns can be held with both hands, your body follows your head around the room, the HUD sits inside your helmet, and every menu is a panel in front of you that you point at.
 
@@ -17,20 +17,16 @@ https://github.com/user-attachments/assets/7f0f3896-5331-4986-bb39-85ec00a618ea
 **1.0.2**
 
 - **Crashes during level loads.** The graphics card stayed fully busy drawing the world behind the black loading screen while the game loaded, and on some loads the graphics driver gave up and the game crashed. The mod now stops drawing the world while the screen is black for a load, so the card only has the load to do.
-- **A small stutter about every 40 seconds.** The mod's own performance check took its measurements on the game's thread. It now takes them in the background.
+- **A small stutter about every 40 seconds** is gone.
 - **The keyboard in terminals.** It comes up every time you open a terminal (after a level change it could stay away). **Done** puts it away and it stays away; one click of the left stick brings it back. A stray character that sat at the start of the first command, so the first command never worked, is cleared.
 
-New in 1.0.2:
-
-- **Keyboard in any menu:** double-click the left stick.
-- **Bug reports made easy:** the mod writes `data\sf_report.txt` every minute, and you can mark a moment by putting both hands on top of your head for a second. See [Reporting a bug](#reporting-a-bug).
-- The mod's log no longer stops after about 100 minutes, has the computer's time once a minute, and tells a stutter during play apart from the pauses inside level loads.
+New in 1.0.2: **the keyboard in any menu**: double-click the left stick.
 
 **1.0.1**
 
 - **Scopes while you move.** On every scoped gun, the dark inside of the scope and the picture in it slid out of the tube whenever you walked, strafed or sprinted with the scope up, and sat right again when you stood still. It now stays in the scope.
 
-Coming from 1.0 or 1.0.1: import the new zip the same way. Your settings are kept.
+Coming from 1.0 or 1.0.1: import the new zip the same way. Your settings are kept. Then delete `plugins\sf_perf.dll` from the profile folder if it is there; the mod no longer uses it.
 
 ---
 
@@ -100,7 +96,7 @@ This is the right-handed layout. The same list is on the settings page, under Co
 | Y | Jump |
 | Right bumper | Tap: pick up. Hold: lower / raise the weapon |
 | Left bumper | Weapon light / laser, pry, harvest |
-| Left stick | Walk. Click: sprint, until you stop or click again |
+| Left stick | Walk. Click: sprint, until you stop or click again. In menus: the keyboard (see below) |
 | Right stick | Turn. Click: crouch. In menus: scroll |
 | D-pad up | Flashlight |
 | D-pad down | Inventory |
@@ -118,8 +114,8 @@ These are the mod's own, so they are worth reading once.
 | Left grip on a long gun | **Two-handed.** Bring your left hand to the fore-grip or barrel and squeeze the grip. That hand now steadies and steers the gun. Let go to release. |
 | Left grip, squeezed fully, + D-pad | **Utility slots** 5 (up), 6 (right), 7 (down), 8 (left). |
 | Left grip, squeezed fully, + View | **Next graphics preset**: High → Medium → Low → Performance → High. The controller buzzes one to four times to tell you which one you are on. |
-| Left grip (squeezed fully) or left stick click, in menus | **Shift-click.** Hold either one and click with the trigger. This is how you do anything the game does on Shift + click, such as moving a whole stack. |
-| Left stick click, in a terminal | **Keyboard back.** The keyboard comes up by itself when a terminal opens; Done puts it away, one click brings it back. A **double click** brings it up in any other menu too. |
+| Left grip, squeezed fully, in menus | **Shift-click.** Hold it and click with the trigger. This is how you do anything the game does on Shift + click, such as moving a whole stack. |
+| Left stick click, in menus | **Keyboard.** It comes up by itself when a terminal opens; Done puts it away and one click brings it back. In any other menu a **double click** brings it up. |
 | Left trigger, while your left hand holds the flashlight | Switches the flashlight between its two holds: a torch (beam where the hand points) and a raised hold for a hand held up by your head. |
 | Both stick clicks, held for a second | UEVR's own menu. |
 
@@ -261,7 +257,7 @@ All four use the engine's TSR anti-aliasing with its flicker rejection turned up
 
 Switching presets while standing in one spot gave: High to Medium +10 to 13 fps, Medium to Low +7 to 10 fps, and Low to Performance reached the 90 fps cap. Indoors, Medium ran at 86 to 90 fps; on the game's test map, 77 to 83.
 
-How these were measured, so you can judge them: one PC (RTX 5080, Ryzen 7 9800X3D, Windows 11), a Steam Frame at 90 Hz streamed through SteamVR, SteamVR's per-application resolution at 83%, the game's own options at Global Illumination 1 and Reflections 1 (medium), Shading, Landscape and Anti-Aliasing 3 (highest). The lake is one of the heaviest outdoor areas. They are one session's numbers from the mod's own log, not a benchmark.
+How these were measured, so you can judge them: one PC (RTX 5080, Ryzen 7 9800X3D, Windows 11), a Steam Frame at 90 Hz streamed through SteamVR, SteamVR's per-application resolution at 83%, the game's own options at Global Illumination 1 and Reflections 1 (medium), Shading, Landscape and Anti-Aliasing 3 (highest). The lake is one of the heaviest outdoor areas. They are one test session's numbers, not a benchmark.
 
 When the frame rate is below your headset's refresh rate, the pointer dot and close objects show a faint double image as you move. That is the missed frames, not a fault in the preset. Go down a preset if it bothers you.
 
@@ -307,20 +303,13 @@ When the frame rate is below your headset's refresh rate, the pointer dot and cl
 
 Open an issue on this repository, or post in the mod's thread on the Flat2VR Discord. Play-test it, break it, and tell me what broke.
 
-**When something goes wrong while you play, put both hands on top of your head for a second.** A double buzz means the mod has marked that exact moment in its log, with the time. Then carry on, or say roughly what happened if you are recording.
-
 Please include:
 
-1. **`data\sf_report.txt`** from `%APPDATA%\UnrealVRMod\SilverFish-Win64-Shipping\`. The mod rewrites it every minute while you play (or press *Write the bug report file now* on the Help page of the settings): the build, your settings that differ from the defaults, the stutters so far, the moments you marked and the end of the log. Personal paths in it are blanked.
+1. The **build number** from the top of the settings page (for this release: 1.0.2, build 6.6.65), and your UEVR build.
 2. Your headset, GPU and CPU, and which **graphics preset** you were on.
 3. What happened, and roughly when in the session (minutes after starting).
-4. If you can: the two full logs from the same folder, **`data\sf_main_log.txt`** (the mod's log) and **`log.txt`** (UEVR's log), and your UEVR build.
 
-All of these files are written fresh at every start, so copy them **before** you start the game again.
-
-If your report is about frame rate or about a graphics preset, the mod's log is what makes it useful: it holds a frame-time line about twice a minute with the preset in use, frames per second, how many frames missed the refresh rate, SteamVR's own graphics-card time per frame, and where the time went (CPU threads, GPU). A report without it is a guess.
-
-What is in those files, so you can decide what to share: the mod's log and the report have timings, which controls and items were used, error messages, and the names of other programs that were using the graphics card at the time (for example a browser or a recorder). They have no window titles, no paths on your PC and no account names. UEVR's own log contains the full path of the profile folder, **which includes your Windows user name**. Blank that out before posting the file in public if you would rather not share it.
+If UEVR itself reported an error, its log is `log.txt` in `%APPDATA%\UnrealVRMod\SilverFish-Win64-Shipping\`. It contains the full path of the profile folder, **which includes your Windows user name**. Blank that out before posting the file in public if you would rather not share it.
 
 ---
 
@@ -340,9 +329,8 @@ Everything is inside `%APPDATA%\UnrealVRMod\SilverFish-Win64-Shipping\`.
 | `plugins\sf_start.dll` | Runs once at start, before UEVR reads its files. It makes sure `actions.json` lists the Steam Frame layout and is read-only, and puts seven UEVR start settings back (below). |
 | `plugins\sf_kbd.dll` | Shows SteamVR's keyboard for terminals and text boxes, and does the fade to black. |
 | `plugins\sf_inv.dll`, `sf_mat.dll`, `sf_txt.dll` | Read-only helpers. UEVR's Lua cannot read some kinds of game data (lists of structs, text values); these read them for the script. |
-| `plugins\sf_perf.dll` | Measures frame times, thread load and GPU use for the log, and reads SteamVR's own graphics-card time per frame. |
 
-Written while you play: `data\sf_settings.txt` (your settings), `data\sf_main_log.txt` (the log), `data\sf_report.txt` (the bug report, every minute), `data\sf_gpu_log.txt` (graphics-card time per frame, one line a second), `actions.json` (made by `sf_start.dll` on the first start).
+Written while you play: `data\sf_settings.txt` (your settings) and `actions.json` (made by `sf_start.dll` on the first start).
 
 **None of this contacts the internet.** No plugin opens a network connection, and nothing is sent anywhere. The source of every plugin is in the `source` folder of this repository.
 

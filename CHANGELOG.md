@@ -1,22 +1,18 @@
 # Changelog
 
-## 1.0.2 (build 6.6.64) - 16 November 2026
+## 1.0.2 (build 6.6.65) - 16 November 2026
 
 **Fixed**
 
-- **Crashes during level loads.** During a load the screen is black, but the graphics card kept drawing the world behind it at full load while the game loaded; on the test PC the graphics driver reset (a GPU crash, Windows' "display driver stopped responding") in the middle of a load. While the screen is black for one of the game's loads the mod now switches the world's drawing off (the game's own `SetEnableWorldRendering`), and on again a quarter of a second after the game's black screens are gone, with the view held black a little longer so the first frames are not shown. Safeties: the world comes back on whatever happens after 45 s, when the fade stops being updated, or after repeated errors. Measured: about 100 W and 20 % graphics load during the black part of a load instead of about 285 W and 95 %. No load crash in about seven hours of testing since.
-- **A small stutter about every 40 seconds** (about 34 ms). The performance plugin took a snapshot of every thread on the PC on the game's own thread each time the mod asked it for numbers. The snapshot is now taken on the plugin's background thread.
+- **Crashes during level loads.** During a load the screen is black, but the graphics card kept drawing the world behind it at full load while the game loaded; on the test PC the graphics driver reset (a GPU crash, Windows' "display driver stopped responding") in the middle of a load. While the screen is black for one of the game's loads the mod now switches the world's drawing off (the game's own `SetEnableWorldRendering`), and on again a quarter of a second after the game's black screens are gone, with the view held black a little longer so the first frames are not shown. Safeties: the world comes back on whatever happens after 45 s, when the fade stops being updated, or after repeated errors. No load crash in about seven hours of testing since.
+- **A small stutter about every 40 seconds** is gone.
 - **The keyboard in terminals.** It now comes up every time a terminal opens: after a level change the mod could look for the terminal with a class object that no longer existed, and it now also uses the moment the game puts the terminal on screen. Done puts the keyboard away and it stays away (a left stick click brings it back); before, it could not be put away. The first keyboard of each terminal sends one Backspace a moment after it appears, which clears a stray character that sat at the start of the line and broke the first command.
 
 **New**
 
-- A double click of the left stick brings up the keyboard in any menu (one click is shift-click, so it cannot be one).
-- `data\sf_report.txt`, rewritten every minute and on a button on the Help page: build, settings that differ from the defaults, stutters, marked moments and the end of the log, with personal paths blanked.
-- Mark a moment: both hands on top of your head for about a second gives a double buzz and a line with the time in the log.
-- The log keeps going in long sessions (it stopped after about 100 minutes), has the computer's time once a minute, and its stutter lines say how much of the frame the mod itself used and keep play apart from level-load pauses.
-- The frame-time lines include SteamVR's own graphics-card time per frame (from `sf_perf.dll`, also written once a second to `data\sf_gpu_log.txt`).
+- A double click of the left stick brings up the keyboard in any menu.
 
-**Coming from 1.0 or 1.0.1:** import the new zip the same way. Your settings are kept. Changed: `scripts\sf_main.lua`, `plugins\sf_kbd.dll`, `plugins\sf_perf.dll` and the texts.
+**Coming from 1.0 or 1.0.1:** import the new zip the same way. Your settings are kept. Changed: `scripts\sf_main.lua`, `plugins\sf_kbd.dll` and the texts. `plugins\sf_perf.dll` is no longer part of the mod; delete it from the profile folder if it is there.
 
 ## 1.0.1 (build 6.6.55) - 10 November 2026
 
