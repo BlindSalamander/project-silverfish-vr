@@ -1,7 +1,7 @@
 -- sf_main.lua - Project Silverfish VR: a UEVR script that makes Project Silverfish play as a motion-controlled VR game.
 -- Published by Blind. What changed in which version: CHANGELOG.md of the release (the development notes - every
 -- version, every finding, every dead end - are not part of this file).
--- Log: data\sf_main_log.txt   Settings: data\sf_settings.txt
+-- Settings: data\sf_settings.txt   (developer log: data\sf_main_log.txt, only with the setting log_file on)
 -- Panel: UEVR menu > "Silverfish VR settings" (its own page; UEVR's "Script UI" page points to it)
 --
 -- Setup it is built for: Steam Frame through SteamVR (OpenVR), UEVR nightly, Native Stereo, game started with -dx11.
@@ -47,7 +47,7 @@
 --   uevr.api:method(...)            vr.<fn>(...) for all VR functions EXCEPT vr:get_mod_value(name)
 --   UEVR_UObjectHook.<fn>(...)      object:Method(...) for game objects      fs. / imgui. with a dot
 
-local SF_VERSION = "6.6.64"          -- the build number: say it in a bug report
+local SF_VERSION = "6.6.65"          -- the build number: say it in a bug report
 local SF_RELEASE = "1.0.2"           -- the published version
 
 local function sf_main_body()
@@ -75,7 +75,7 @@ local function LOG(s)
     logdirty = true
 end
 local function flushlog()
-    if logdirty then logdirty = false; pcall(fs.write, "sf_main_log.txt", table.concat(loglines, "\n")) end
+    if logdirty and SF_LOG_ON then logdirty = false; pcall(fs.write, "sf_main_log.txt", table.concat(loglines, "\n")) end   -- v6.6.65: developer setting
 end
 -- v4.17 CRASH TRACER: for 8 s around every menu open/close, the name of each engine call is written to
 -- data\sf_lastcall.txt just before it runs (and "idle" after each tick). After a crash that file names the call.
@@ -173,8 +173,9 @@ local S = {
     load_light = true,           -- v6.6.56: while that fade is black for a load, the world is not drawn (the card only has the load)
     load_light_warm = 0.6,       -- v6.6.56: after drawing comes back, the view stays black at least this long (s)
     load_light_max = 45,         -- v6.6.56: safety - drawing comes back after this long whatever happens (s)
-    mark_gesture = true,         -- v6.6.57: both hands on top of your head for a second = "MARK" in the log + double buzz
-    bug_report_file = true,      -- v6.6.57: data\sf_report.txt rewritten every minute (for players' bug reports)
+    mark_gesture = false,        -- v6.6.57: both hands on top of your head for a second = "MARK" in the log + double buzz (developer)
+    bug_report_file = false,     -- v6.6.57: data\sf_report.txt rewritten every minute (developer)
+    log_file = false,            -- v6.6.65: write data\sf_main_log.txt (developer; the published build keeps no log)
     pc_right_eye = false,        -- v6.6.61: the PC window (and recordings of it) shows the right eye (sf_eye.dll - development only, not published)
     timeline = false,            -- v6.6.59: what you do (poses, buttons, menus, item, level) -> data\sf_timeline.csv via sf_perf.dll (development build of it only)
     -- v6.6.15
@@ -271,6 +272,7 @@ local function load_settings()
 end
 do local d = {}; for k, v in pairs(S) do if type(v) ~= "table" then d[k] = v end end; SF_S_DEFAULTS = d end   -- v6.6.57
 load_settings()
+SF_LOG_ON = S.log_file == true                                   -- v6.6.65: global on purpose (no local slots left)
 
 ---------------------------------------------------------------------------
 -- helpers
@@ -502,7 +504,7 @@ local function vguard_hold(reason, secs)
     vguard.until_t = math.max(vguard.until_t, T + secs)
     vguard.holds = vguard.holds + 1
     if vguard.holds <= 12 then LOG("hands held still " .. string.format("%.1f", secs) .. " s: " .. reason) end
-    pcall(fs.write, "sf_lastcall.txt", string.format("%.2f hold: %s", T, reason))   -- rare; crash breadcrumb
+    if SF_LOG_ON then pcall(fs.write, "sf_lastcall.txt", string.format("%.2f hold: %s", T, reason)) end   -- rare; crash breadcrumb (developer)
 end
 
 -- Re-baselined at the END of our tick every frame: a difference seen in the view callback can then only come from
@@ -5213,7 +5215,7 @@ local function pp_set(n, v)
 end
 function V62.probe_measure()                                  -- also starts sf_perf's next window
     V62.perf_raw = nil
-    pcall(function() api:dispatch_custom_event("sfperf", "report") end)
+    if SF_LOG_ON then pcall(function() api:dispatch_custom_event("sfperf", "report") end) end   -- v6.6.65 (developer)
     local pf = V62.perf_raw
     if pf == nil then return nil end
     local fps, g = tonumber(pf:match("fps=([^;]+)")), tonumber(pf:match("gpu_game=([^;]+)"))
@@ -6205,7 +6207,7 @@ function V62.panel()
     V62.say("Project Silverfish VR " .. SF_RELEASE .. " by Blind  (build " .. SF_VERSION .. ")")
     local nerr = 0
     for _, n in pairs(errors) do nerr = nerr + n end
-    if nerr > 0 then V62.say("Something went wrong " .. nerr .. " times this session - details in data\\sf_main_log.txt") end
+    if nerr > 0 then V62.say("Something went wrong " .. nerr .. " times this session" .. (SF_LOG_ON and " - details in data\\sf_main_log.txt" or ".")) end
     V62.say("Click a heading to open it. Every change is saved at once.")
     if V62.section("Graphics") then
         V62.say("Pick one. It is used at once and remembered. In the headset: left grip, squeezed fully, + View steps to the next one, and the buzzes count its number.")
@@ -6312,15 +6314,15 @@ function V62.panel()
         V62.say("Not working in VR yet: the binoculars, and the photo camera's viewfinder (photos themselves work).")
         V62.say("Crouch-jump lower than you expect? The game lets you jump less high when you are hungry.")
         V62.say("Settings file: data\\sf_settings.txt in this game's UEVR profile folder. Delete it to get every default back.")
-        V62.say("Something felt wrong (a stutter, a glitch, a sound)? Put both hands on top of your head for a second. A double buzz means the log has marked that exact moment - then say roughly what happened.")
-        V62.row("Mark a moment: both hands on your head", "mark_gesture", nil, nil)
-        if S.dev_tools == true then                                   -- v6.6.64: development switches (1.0.2 does not ship their plugins' parts)
+        V62.say("Found a bug? Open an issue on the mod's GitHub page and say what happened and roughly when.")
+        if S.dev_tools == true then                                   -- v6.6.64/65: developer switches (not part of the published build's use)
+            V62.row("Mark a moment: both hands on your head", "mark_gesture", nil, nil)
+            V62.row("Log file (data\\sf_main_log.txt, from the next start)", "log_file", nil, nil)
             V62.row("Record what I do (timeline file for bug hunting)", "timeline", nil, nil)   -- v6.6.59
             V62.row("PC window shows the right eye (for recordings)", "pc_right_eye", nil, nil)   -- v6.6.61
+            if imgui.button("Write the bug report file now###sf_report") then pcall(V62.write_report, "written with the button"); V62.rep_said = T end
+            if V62.rep_said ~= nil and T - V62.rep_said < 6 then V62.say("Written: data\\sf_report.txt") end
         end
-        V62.say("Reporting a bug: attach data\\sf_report.txt from that folder to an issue on the mod's GitHub page. It is rewritten every minute while you play, so copy it before you start the game again. It has no personal details. The full logs are data\\sf_main_log.txt and UEVR's log.txt.")
-        if imgui.button("Write the bug report file now###sf_report") then pcall(V62.write_report, "written with the button"); V62.rep_said = T end
-        if V62.rep_said ~= nil and T - V62.rep_said < 6 then V62.say("Written: data\\sf_report.txt") end
     end
     if S.dev_tools == true and V62.section("Development: every switch") then draw_panel() end
 end
@@ -6584,7 +6586,7 @@ V62.reg("on_pre_engine_tick", function(engine, delta)
     if ft ~= nil then ft.all = (ft.all or 0) + 1 end
     if V62.pp ~= nil then V62.ft = nil                         -- v6.6.21: the probe owns sf_perf's window
     elseif ft == nil or ft.p ~= S.gfx_level then
-        pcall(function() api:dispatch_custom_event("sfperf", "report") end)   -- v6.6.11: start sf_perf's window too
+        if SF_LOG_ON then pcall(function() api:dispatch_custom_event("sfperf", "report") end) end   -- v6.6.11 / v6.6.65 (developer)
         V62.ft = { p = S.gfx_level, t0 = T + 3, n = 0, sum = 0, over = 0, worst = 0, s0 = SF_SCRIPT_T or 0, all = 0 }
     elseif T > ft.t0 and not menu_mode and lvl ~= nil and lvl.ready and delta < 0.5 then
         ft.n, ft.sum = ft.n + 1, ft.sum + delta
@@ -6597,7 +6599,7 @@ V62.reg("on_pre_engine_tick", function(engine, delta)
             LOG(string.format("frame times, graphics %s (%s): %.1f fps average, %.1f%% of frames missed 90 Hz, worst %d ms | this script: %s per frame",
                 tostring(ft.p), pr and pr.name or "?", ft.n / ft.sum, 100 * ft.over / ft.n, math.floor(ft.worst * 1000), st))
             V62.perf_raw = nil                                   -- v6.6.11: where the time goes (sf_perf.dll)
-            pcall(function() api:dispatch_custom_event("sfperf", "report") end)
+            if SF_LOG_ON then pcall(function() api:dispatch_custom_event("sfperf", "report") end) end   -- v6.6.65 (developer)
             local pf = V62.perf_raw
             if pf ~= nil then
                 local function g(k) return pf:match(k .. "=([^;]+)") or "?" end
